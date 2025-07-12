@@ -2,16 +2,16 @@
   "name": "gemini-mcp-server",
   "version": "1.0.0",
   "description": "Gemini-powered MCP Server for comprehensive codebase analysis. Analyze any project with Gemini 2.0 Flash AI - get architecture insights, bug detection, code quality reviews, and answers to specific questions about your codebase.",
-  "main": "dist/index.js",
-  "module": "./src/index.ts",
+  "main": "dist/simple-server.js",
+  "module": "./src/simple-server.ts",
   "files": [
     "dist"
   ],
   "bin": {
-    "gemini-mcp-server": "dist/index.js"
+    "gemini-mcp-server": "dist/simple-server.js"
   },
-  "exports": "./dist/index.js",
-  "types": "dist/index.d.ts",
+  "exports": "./dist/simple-server.js",
+  "types": "dist/simple-server.d.ts",
   "type": "module",
   "repository": {
     "type": "git",
@@ -22,10 +22,10 @@
   },
   "homepage": "https://github.com/cyanheads/mcp-ts-template#readme",
   "scripts": {
-    "build": "tsc && node --loader ts-node/esm scripts/make-executable.ts dist/index.js",
-    "start": "node dist/index.js",
-    "start:stdio": "MCP_LOG_LEVEL=debug MCP_TRANSPORT_TYPE=stdio node dist/index.js",
-    "start:http": "MCP_LOG_LEVEL=debug MCP_TRANSPORT_TYPE=http node dist/index.js",
+    "build": "tsc && chmod +x dist/simple-server.js",
+    "start": "node dist/simple-server.js",
+    "start:stdio": "node dist/simple-server.js",
+    "start:http": "node dist/simple-server.js",
     "start:agent": "MCP_LOG_LEVEL=debug node dist/agent/cli/boot.js",
     "rebuild": "ts-node --esm scripts/clean.ts && npm run build",
     "docs:generate": "typedoc --tsconfig ./tsconfig.typedoc.json",
@@ -66,7 +66,8 @@
     "validator": "13.15.15",
     "winston": "^3.17.0",
     "winston-transport": "^4.9.0",
-    "zod": "^3.25.74"
+    "zod": "^3.25.74",
+    "zod-to-json-schema": "^3.23.5"
   },
   "keywords": [
     "typescript",

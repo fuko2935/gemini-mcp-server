@@ -200,8 +200,11 @@ export async function geminiCodebaseAnalyzerLogic(
   });
 
   try {
+    // Use API key from environment (Smithery config) or from params
+    const apiKey = process.env.GEMINI_API_KEY || params.geminiApiKey;
+    
     // Validate API key is provided when tool is actually invoked
-    if (!params.geminiApiKey) {
+    if (!apiKey) {
       throw new Error("Gemini API key is required to use this tool. Get your key from https://makersuite.google.com/app/apikey");
     }
 
@@ -212,7 +215,7 @@ export async function geminiCodebaseAnalyzerLogic(
     }
 
     // Initialize Gemini AI
-    const genAI = new GoogleGenerativeAI(params.geminiApiKey);
+    const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     logger.debug("Gemini client initialized", {

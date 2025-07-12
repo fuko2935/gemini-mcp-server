@@ -222,16 +222,13 @@ export default function({ sessionId, config }: { sessionId: string, config: any 
   return server;
 }
 
-// Start the server (for direct execution)
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Gemini MCP Server running on stdio");
-}
-
-// Only run main if this is the entry point
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
+// Start the server for direct execution (when run as standalone script)
+if (typeof require !== 'undefined' && require.main === module) {
+  (async () => {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Gemini MCP Server running on stdio");
+  })().catch((error) => {
     console.error("Failed to start server:", error);
     process.exit(1);
   });

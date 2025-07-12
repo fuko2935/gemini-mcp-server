@@ -3,3 +3,10 @@ name: "gemini-mcp-server"
 description: "Gemini-powered MCP Server for comprehensive codebase analysis with AI"
 version: "1.0.0"
 author: "fuko2935"
+configSchema:
+  type: "object"
+  properties:
+    geminiApiKey:
+      type: "string"
+      description: "Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)"
+  required: ["geminiApiKey"]

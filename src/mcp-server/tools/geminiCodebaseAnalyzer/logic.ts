@@ -33,6 +33,7 @@ export const GeminiCodebaseAnalyzerInputSchema = z
     geminiApiKey: z
       .string()
       .min(1, "Gemini API key is required.")
+      .optional()
       .describe(
         "Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)",
       ),
@@ -199,6 +200,11 @@ export async function geminiCodebaseAnalyzerLogic(
   });
 
   try {
+    // Validate API key is provided when tool is actually invoked
+    if (!params.geminiApiKey) {
+      throw new Error("Gemini API key is required to use this tool. Get your key from https://makersuite.google.com/app/apikey");
+    }
+
     // Validate project path exists
     const stats = await fs.stat(params.projectPath);
     if (!stats.isDirectory()) {

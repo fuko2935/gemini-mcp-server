@@ -1,26 +1,10 @@
-runtime: "typescript"
-name: "gemini-mcp-server"
-description: "Gemini-powered MCP Server for comprehensive codebase analysis with AI"
-version: "1.0.0"
-author: "fuko2935"
-build:
-  dockerfile: "Dockerfile"
-  dockerBuildPath: "."
-startCommand:
-  type: stdio
-  configSchema:
-    type: object
-    required:
-      - geminiApiKey
-    properties:
-      geminiApiKey:
-        type: string
-        description: "Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)"
-  commandFunction: |
-    (config) => ({ 
-      command: 'node', 
-      args: ['./dist/simple-server.js'], 
-      env: { GEMINI_API_KEY: config.geminiApiKey } 
-    })
+configSchema:
+  type: object
+  required:
+    - geminiApiKey
+  properties:
+    geminiApiKey:
+      type: string
+      description: "Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)"
 exampleConfig:
   geminiApiKey: "your-api-key-here"

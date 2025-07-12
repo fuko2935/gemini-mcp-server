@@ -26,6 +26,10 @@ const GeminiCodebaseAnalyzerSchema = z.object({
 const server = new Server({
   name: "gemini-mcp-server",
   version: "1.0.0",
+}, {
+  capabilities: {
+    tools: {},
+  },
 });
 
 // List tools handler
@@ -213,14 +217,22 @@ async function prepareFullContext(projectPath: string): Promise<string> {
   }
 }
 
-// Start the server
+// Smithery export pattern
+export default function({ sessionId, config }: { sessionId: string, config: any }) {
+  return server;
+}
+
+// Start the server (for direct execution)
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Gemini MCP Server running on stdio");
 }
 
-main().catch((error) => {
-  console.error("Failed to start server:", error);
-  process.exit(1);
-});
+// Only run main if this is the entry point
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  });
+}

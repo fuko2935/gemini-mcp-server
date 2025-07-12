@@ -1,0 +1,5 @@
+runtime: "typescript"
+name: "gemini-mcp-server"
+description: "Gemini-powered MCP Server for comprehensive codebase analysis with AI"
+version: "1.0.0"
+author: "fuko2935"

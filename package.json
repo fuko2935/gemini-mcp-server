@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Gemini-powered MCP Server for comprehensive codebase analysis. Analyze any project with Gemini 2.0 Flash AI - get architecture insights, bug detection, code quality reviews, and answers to specific questions about your codebase.",
   "main": "dist/index.js",
+  "module": "./src/index.ts",
   "files": [
     "dist"
   ],

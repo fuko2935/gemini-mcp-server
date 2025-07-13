@@ -164,7 +164,7 @@ This is a demo response without AI analysis. To get full Gemini AI-powered analy
 
         // Initialize Gemini AI
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
         const systemPrompt = `You are a senior AI Software Engineer and consultant with full access to an entire software project codebase. Your task is to analyze the complete project context and a specific question from another coding AI, providing the clearest and most accurate answer to help that AI.
 
@@ -218,7 +218,7 @@ ${analysis}
 
 ---
 
-*Analysis powered by Gemini 2.0 Flash*`,
+*Analysis powered by Gemini 2.5 Pro*`,
             },
           ],
         };

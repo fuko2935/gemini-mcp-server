@@ -167,8 +167,8 @@ This is a demo response without AI analysis. To get full Gemini AI-powered analy
         const model = genAI.getGenerativeModel({ 
           model: "gemini-2.5-pro",
           generationConfig: {
-            maxOutputTokens: 8192,
-            temperature: 0.1,
+            maxOutputTokens: 65536,
+            temperature: 0.5,
             topK: 40,
             topP: 0.95,
           }

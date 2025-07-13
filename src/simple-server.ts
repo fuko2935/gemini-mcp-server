@@ -70,8 +70,7 @@ function normalizeProjectPath(projectPath: string): string {
 const GeminiCodebaseAnalyzerSchema = z.object({
   projectPath: z.string().min(1).describe("Path to your project directory (e.g., 'C:\\Users\\YourName\\Projects\\MyProject' or '/home/user/Projects/MyProject'). Only workspace/project directories are allowed for security."),
   question: z.string().min(1).max(2000).describe("Your question about the codebase"),
-  geminiApiKey: z.string().min(1).optional().describe("Your Gemini API key (can be set via environment)"),
-  model: z.string().optional().describe("Gemini model to use (default: gemini-2.5-pro). Options: gemini-2.5-pro, gemini-2.0-flash, gemini-1.5-pro")
+  geminiApiKey: z.string().min(1).optional().describe("Your Gemini API key (can be set via environment)")
 });
 
 // Create the server
@@ -163,10 +162,17 @@ This is a demo response without AI analysis. To get full Gemini AI-powered analy
           throw new Error("No readable files found in the project directory");
         }
 
-        // Initialize Gemini AI with configurable model
-        const modelName = params.model || process.env.GEMINI_MODEL || "gemini-2.5-pro";
+        // Initialize Gemini AI with optimal generation config
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: modelName });
+        const model = genAI.getGenerativeModel({ 
+          model: "gemini-2.5-pro",
+          generationConfig: {
+            maxOutputTokens: 8192,
+            temperature: 0.1,
+            topK: 40,
+            topP: 0.95,
+          }
+        });
 
         const systemPrompt = `You are a senior AI Software Engineer and consultant with full access to an entire software project codebase. Your task is to analyze the complete project context and a specific question from another coding AI, providing the clearest and most accurate answer to help that AI.
 
@@ -220,7 +226,7 @@ ${analysis}
 
 ---
 
-*Analysis powered by ${modelName}*`,
+*Analysis powered by Gemini 2.5 Pro*`,
             },
           ],
         };

@@ -15,28 +15,60 @@ import { glob } from "glob";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-// Cross-platform path normalization helper
+// Security: Restricted paths for safety
+const DANGEROUS_PATHS = [
+  '/etc', '/usr/bin', '/bin', '/sbin', '/boot', '/sys', '/proc',
+  '/mnt/c/Windows', '/mnt/c/Program Files', '/mnt/c/ProgramData',
+  'C:\\Windows', 'C:\\Program Files', 'C:\\ProgramData',
+  '/root', '/var/log', '/var/lib'
+];
+
+const ALLOWED_PATH_PATTERNS = [
+  /^\/mnt\/c\/(?:Users|Projects|Development|Dev|Code|Workspace)/i,
+  /^\/home\/[^\/]+\/(?:Projects|Development|Dev|Code|Workspace)/i,
+  /^\.{1,2}$/,  // Allow current and parent directory
+  /^\.\//, // Allow relative paths from current directory
+];
+
+// Cross-platform path normalization with security validation
 function normalizeProjectPath(projectPath: string): string {
+  let normalizedPath = projectPath;
+  
   // Convert Windows paths to WSL/Unix format
   if (projectPath.match(/^[A-Za-z]:\\/)) {
-    // C:\path\to\project -> /mnt/c/path/to/project
     const drive = projectPath.charAt(0).toLowerCase();
     const pathWithoutDrive = projectPath.slice(3).replace(/\\/g, '/');
-    return `/mnt/${drive}/${pathWithoutDrive}`;
+    normalizedPath = `/mnt/${drive}/${pathWithoutDrive}`;
   }
-  
   // Handle UNC paths \\server\share -> /server/share  
-  if (projectPath.startsWith('\\\\')) {
-    return projectPath.replace(/\\/g, '/').substring(1);
+  else if (projectPath.startsWith('\\\\')) {
+    normalizedPath = projectPath.replace(/\\/g, '/').substring(1);
   }
   
-  // Already Unix-style path, return as-is
-  return projectPath;
+  // Security validation: Check against dangerous paths
+  const isDangerous = DANGEROUS_PATHS.some(dangerousPath => 
+    normalizedPath.toLowerCase().startsWith(dangerousPath.toLowerCase())
+  );
+  
+  if (isDangerous) {
+    throw new Error(`Access denied: Path '${projectPath}' is restricted for security reasons. Please use workspace/project directories only.`);
+  }
+  
+  // Check if path matches allowed patterns (for public deployment)
+  const isAllowed = ALLOWED_PATH_PATTERNS.some(pattern => 
+    pattern.test(normalizedPath) || pattern.test(projectPath)
+  );
+  
+  if (!isAllowed) {
+    throw new Error(`Access denied: Path '${projectPath}' is not in an allowed workspace directory. Please use paths like 'C:\\Users\\YourName\\Projects' or '/home/user/Projects'.`);
+  }
+  
+  return normalizedPath;
 }
 
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
-  projectPath: z.string().min(1).describe("Absolute path to the project directory to analyze"),
+  projectPath: z.string().min(1).describe("Path to your project directory (e.g., 'C:\\Users\\YourName\\Projects\\MyProject' or '/home/user/Projects/MyProject'). Only workspace/project directories are allowed for security."),
   question: z.string().min(1).max(2000).describe("Your question about the codebase"),
   geminiApiKey: z.string().min(1).optional().describe("Your Gemini API key (can be set via environment)")
 });

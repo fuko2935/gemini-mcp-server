@@ -15,6 +15,25 @@ import { glob } from "glob";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
+// Cross-platform path normalization helper
+function normalizeProjectPath(projectPath: string): string {
+  // Convert Windows paths to WSL/Unix format
+  if (projectPath.match(/^[A-Za-z]:\\/)) {
+    // C:\path\to\project -> /mnt/c/path/to/project
+    const drive = projectPath.charAt(0).toLowerCase();
+    const pathWithoutDrive = projectPath.slice(3).replace(/\\/g, '/');
+    return `/mnt/${drive}/${pathWithoutDrive}`;
+  }
+  
+  // Handle UNC paths \\server\share -> /server/share  
+  if (projectPath.startsWith('\\\\')) {
+    return projectPath.replace(/\\/g, '/').substring(1);
+  }
+  
+  // Already Unix-style path, return as-is
+  return projectPath;
+}
+
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
   projectPath: z.string().min(1).describe("Absolute path to the project directory to analyze"),
@@ -52,6 +71,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
         const params = GeminiCodebaseAnalyzerSchema.parse(request.params.arguments);
         
+        // Normalize Windows paths to WSL/Linux format  
+        const normalizedPath = normalizeProjectPath(params.projectPath);
+        
         // Use API key from environment (Smithery config) or from params
         const apiKey = process.env.GEMINI_API_KEY || params.geminiApiKey;
         
@@ -66,7 +88,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 ## Project Structure Analysis (No AI Analysis)
 
-**Project Path:** ${params.projectPath}
+**Project Path:** ${params.projectPath} (normalized: ${normalizedPath})
 **Question:** ${params.question}
 
 ### Demo Response
@@ -86,23 +108,23 @@ This is a demo response without AI analysis. To get full Gemini AI-powered analy
           };
         }
 
-        // Validate project path exists (with better error handling)
+        // Validate normalized project path exists (with better error handling)
         let stats;
         try {
-          stats = await fs.stat(params.projectPath);
+          stats = await fs.stat(normalizedPath);
         } catch (error: any) {
           if (error.code === 'ENOENT') {
-            throw new Error(`ENOENT: no such file or directory, stat '${params.projectPath}'`);
+            throw new Error(`ENOENT: no such file or directory, stat '${normalizedPath}' (original: '${params.projectPath}')`);
           }
           throw new Error(`Failed to access project path: ${error.message}`);
         }
         
         if (!stats.isDirectory()) {
-          throw new Error(`Project path is not a directory: ${params.projectPath}`);
+          throw new Error(`Project path is not a directory: ${normalizedPath}`);
         }
 
-        // Prepare project context
-        const fullContext = await prepareFullContext(params.projectPath);
+        // Prepare project context using normalized path
+        const fullContext = await prepareFullContext(normalizedPath);
         
         if (fullContext.length === 0) {
           throw new Error("No readable files found in the project directory");
@@ -149,6 +171,7 @@ ${params.question}`;
               text: `# Gemini Codebase Analysis Results
 
 ## Project: ${params.projectPath}
+*Normalized Path:* ${normalizedPath}
 
 **Question:** ${params.question}
 

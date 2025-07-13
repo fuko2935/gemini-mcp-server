@@ -13,7 +13,7 @@ startCommand:
   commandFunction: |-
     (config) => ({
       command: 'node',
-      args: ['dist/index.js'],
+      args: ['dist/simple-server.js'],
       env: {
         GEMINI_API_KEY: config.geminiApiKey
       }

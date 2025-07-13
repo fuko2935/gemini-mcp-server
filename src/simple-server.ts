@@ -217,19 +217,12 @@ async function prepareFullContext(projectPath: string): Promise<string> {
   }
 }
 
-// Smithery export pattern
-export default function({ sessionId, config }: { sessionId: string, config: any }) {
-  return server;
-}
-
-// Start the server for direct execution (when run as standalone script)
-if (typeof require !== 'undefined' && require.main === module) {
-  (async () => {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    console.error("Gemini MCP Server running on stdio");
-  })().catch((error) => {
-    console.error("Failed to start server:", error);
-    process.exit(1);
-  });
-}
+// Start the server (Smithery will run this directly)
+(async () => {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Gemini MCP Server running on stdio");
+})().catch((error) => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
+});

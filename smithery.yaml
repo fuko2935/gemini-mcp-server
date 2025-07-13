@@ -1,10 +1,20 @@
-configSchema:
-  type: object
-  required:
-    - geminiApiKey
-  properties:
-    geminiApiKey:
-      type: string
-      description: "Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)"
-exampleConfig:
-  geminiApiKey: "your-api-key-here"
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - geminiApiKey
+    properties:
+      geminiApiKey:
+        type: string
+        description: "Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)"
+  exampleConfig:
+    geminiApiKey: "your-api-key-here"
+  commandFunction: |-
+    (config) => ({
+      command: 'node',
+      args: ['dist/index.js'],
+      env: {
+        GEMINI_API_KEY: config.geminiApiKey
+      }
+    })

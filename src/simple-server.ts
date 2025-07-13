@@ -55,12 +55,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Use API key from environment (Smithery config) or from params
         const apiKey = process.env.GEMINI_API_KEY || params.geminiApiKey;
         
-        if (!apiKey) {
-          throw new Error("Gemini API key is required. Get your key from https://makersuite.google.com/app/apikey");
+        if (!apiKey || apiKey === "API_KEY_PLACEHOLDER" || apiKey === "your-api-key-here") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `# Gemini Codebase Analysis - Demo Mode
+
+**Status:** API key not configured
+
+## Project Structure Analysis (No AI Analysis)
+
+**Project Path:** ${params.projectPath}
+**Question:** ${params.question}
+
+### Demo Response
+This is a demo response without AI analysis. To get full Gemini AI-powered analysis:
+
+1. Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Configure it in Smithery or pass as parameter
+
+### Basic Project Info
+- Target directory: ${params.projectPath}
+- Analysis requested: ${params.question}
+- Status: Waiting for valid API key
+
+*To enable full analysis, provide a valid Gemini API key*`,
+              },
+            ],
+          };
         }
 
-        // Validate project path exists
-        const stats = await fs.stat(params.projectPath);
+        // Validate project path exists (with better error handling)
+        let stats;
+        try {
+          stats = await fs.stat(params.projectPath);
+        } catch (error: any) {
+          if (error.code === 'ENOENT') {
+            throw new Error(`ENOENT: no such file or directory, stat '${params.projectPath}'`);
+          }
+          throw new Error(`Failed to access project path: ${error.message}`);
+        }
+        
         if (!stats.isDirectory()) {
           throw new Error(`Project path is not a directory: ${params.projectPath}`);
         }
@@ -132,21 +168,62 @@ ${analysis}
           ],
         };
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        let troubleshootingTips = [];
+        
+        // Provide specific tips based on error type
+        if (errorMessage.includes('ENOENT')) {
+          troubleshootingTips = [
+            "✗ **Path Error**: The specified directory doesn't exist or isn't accessible",
+            "• Check the path spelling and ensure it exists",
+            "• For WSL/Linux paths, use absolute paths starting with /",
+            "• For Windows paths, try converting to WSL format",
+            `• Attempted path: ${(error as any)?.path || 'unknown'}`
+          ];
+        } else if (errorMessage.includes('API key')) {
+          troubleshootingTips = [
+            "✗ **API Key Error**: Invalid or missing Gemini API key",
+            "• Get your key from [Google AI Studio](https://makersuite.google.com/app/apikey)",
+            "• Configure it in Smithery during installation",
+            "• Or pass it as geminiApiKey parameter"
+          ];
+        } else if (errorMessage.includes('timeout')) {
+          troubleshootingTips = [
+            "✗ **Timeout Error**: Request took too long",
+            "• Try with a smaller project directory",
+            "• Check your internet connection",
+            "• Reduce the scope of your question"
+          ];
+        } else {
+          troubleshootingTips = [
+            "✗ **General Error**: Something went wrong",
+            "• Verify the project path exists and is accessible",
+            "• Ensure your Gemini API key is valid",
+            "• Check that the project directory contains readable files",
+            "• Try with a smaller project or more specific question"
+          ];
+        }
+
         return {
           content: [
             {
               type: "text",
               text: `# Gemini Codebase Analysis - Error
 
-**Error:** ${error instanceof Error ? error.message : String(error)}
+**Error:** ${errorMessage}
 
-### Troubleshooting Tips:
-- Verify the project path exists and is accessible
-- Ensure your Gemini API key is valid
-- Check that the project directory contains readable files
-- Try with a smaller project or more specific question
+### Troubleshooting Guide
 
-*For support, check your API key at: https://makersuite.google.com/app/apikey*`,
+${troubleshootingTips.join('\n')}
+
+---
+
+### Need Help?
+- Check your API key at: https://makersuite.google.com/app/apikey
+- Ensure the project path is accessible to the server
+- Try with a simpler question or smaller project
+
+*Error occurred during: ${errorMessage.includes('ENOENT') ? 'Path validation' : errorMessage.includes('API key') ? 'API key validation' : 'AI analysis'}*`,
             },
           ],
           isError: true,

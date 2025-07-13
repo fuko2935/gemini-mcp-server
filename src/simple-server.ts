@@ -123,35 +123,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Use API key from environment (Smithery config) or from params
         const apiKey = process.env.GEMINI_API_KEY || params.geminiApiKey;
         
-        if (!apiKey || apiKey === "API_KEY_PLACEHOLDER" || apiKey === "your-api-key-here") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `# Gemini Codebase Analysis - Demo Mode
-
-**Status:** API key not configured
-
-## Project Structure Analysis (No AI Analysis)
-
-**Project Path:** ${params.projectPath} (normalized: ${normalizedPath})
-**Question:** ${params.question}
-
-### Demo Response
-This is a demo response without AI analysis. To get full Gemini AI-powered analysis:
-
-1. Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Configure it in Smithery or pass as parameter
-
-### Basic Project Info
-- Target directory: ${params.projectPath}
-- Analysis requested: ${params.question}
-- Status: Waiting for valid API key
-
-*To enable full analysis, provide a valid Gemini API key*`,
-              },
-            ],
-          };
+        if (!apiKey) {
+          throw new Error("Gemini API key is required. Get your key from https://makersuite.google.com/app/apikey");
         }
 
         // Validate normalized project path exists (with better error handling)
@@ -317,36 +290,8 @@ ${troubleshootingTips.join('\n')}
         // Use API key from environment (Smithery config) or from params
         const apiKey = process.env.GEMINI_API_KEY || params.geminiApiKey;
         
-        if (!apiKey || apiKey === "API_KEY_PLACEHOLDER" || apiKey === "your-api-key-here") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `# Gemini Code Search - Demo Mode
-
-**Status:** API key not configured
-
-## Search Query: "${params.searchQuery}"
-**Project Path:** ${params.projectPath} (normalized: ${normalizedPath})
-**File Types:** ${params.fileTypes?.join(', ') || 'All files'}
-**Max Results:** ${params.maxResults || 5}
-
-### Demo Response
-This tool performs fast, targeted search through your codebase using AI analysis. To enable full functionality:
-
-1. Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Configure it in Smithery or pass as parameter
-
-### How it works:
-- Scans your project for files matching the search query
-- Uses relevance scoring to find the most relevant code snippets  
-- Analyzes only the most relevant parts (much faster than full analysis)
-- Perfect for finding specific functions, patterns, or features
-
-*To enable full search, provide a valid Gemini API key*`,
-              },
-            ],
-          };
+        if (!apiKey) {
+          throw new Error("Gemini API key is required. Get your key from https://makersuite.google.com/app/apikey");
         }
 
         // Validate normalized project path exists

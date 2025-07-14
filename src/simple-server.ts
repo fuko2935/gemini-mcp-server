@@ -942,6 +942,50 @@ function normalizeProjectPath(projectPath: string): string {
   return normalizedPath;
 }
 
+// Retry utility for handling Gemini API rate limits
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 24, // 24 attempts = 2 minutes (5 seconds * 24 = 120 seconds)
+  delayMs: number = 5000 // 5 seconds between retries
+): Promise<T> {
+  let lastError: Error;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a rate limit error
+      const isRateLimit = error.message && (
+        error.message.includes('429') || 
+        error.message.includes('Too Many Requests') || 
+        error.message.includes('quota') || 
+        error.message.includes('rate limit') ||
+        error.message.includes('exceeded your current quota')
+      );
+      
+      if (isRateLimit && attempt < maxRetries) {
+        const remainingTime = Math.ceil((maxRetries - attempt) * delayMs / 1000);
+        console.log(`🔄 Gemini API rate limit hit (attempt ${attempt}/${maxRetries}). Retrying in ${delayMs/1000}s... (${remainingTime}s remaining)`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+      
+      // If not a rate limit error, or we've exhausted retries, throw enhanced error
+      if (isRateLimit) {
+        throw new Error(`Gemini API rate limit exceeded after ${maxRetries} attempts over 2 minutes. Please try again later or consider upgrading your API plan. Original error: ${error.message}`);
+      }
+      
+      // For other errors, throw immediately
+      throw error;
+    }
+  }
+  
+  // This should never be reached, but just in case
+  throw lastError!;
+}
+
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
@@ -1370,11 +1414,19 @@ Question: "Analyze the database schema, relationships, and suggest optimizations
 - Or pass in tool parameters
 
 ### "Too Many Requests" Error
-**Problem**: \`429 Too Many Requests\`
-**Solutions**:
-- Wait a moment and try again
+**Problem**: \`429 Too Many Requests\` or \`exceeded your current quota\`
+**Good News**: This server has automatic retry! 🔄
+**What Happens**:
+- System automatically retries every 5 seconds for 2 minutes
+- Rate limits usually reset within 1 minute
+- You'll see retry progress in logs
+- After 2 minutes, you'll get a clear error message
+
+**Manual Solutions**:
+- Wait 1-2 minutes and try again
 - Use smaller projects or more specific questions
 - Consider upgrading your Gemini API plan
+- Break large questions into smaller parts
 
 ### "Transport is Closed" Error
 **Problem**: MCP connection lost
@@ -1525,8 +1577,8 @@ ${fullContext}
 CODING AI QUESTION:
 ${params.question}`;
 
-        // Send to Gemini AI
-        const result = await model.generateContent(megaPrompt);
+        // Send to Gemini AI with retry mechanism for rate limits
+        const result = await retryWithBackoff(() => model.generateContent(megaPrompt));
         const response = await result.response;
         const analysis = response.text();
 
@@ -1728,8 +1780,8 @@ RESPONSE FORMAT:
 - Be concise but comprehensive
 - Focus on answering the search query specifically`;
 
-        // Send to Gemini AI
-        const result = await model.generateContent(searchPrompt);
+        // Send to Gemini AI with retry mechanism for rate limits
+        const result = await retryWithBackoff(() => model.generateContent(searchPrompt));
         const response = await result.response;
         const analysis = response.text();
 

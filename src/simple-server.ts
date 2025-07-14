@@ -1306,9 +1306,24 @@ function normalizeProjectPath(projectPath: string): string {
 function resolveApiKeys(params: any): string[] {
   const keys: string[] = [];
   
-  // Priority 1: geminiApiKeys array
-  if (params.geminiApiKeys && params.geminiApiKeys.length > 0) {
-    return params.geminiApiKeys;
+  // Priority 1: geminiApiKeys string (comma-separated) or array
+  if (params.geminiApiKeys) {
+    if (typeof params.geminiApiKeys === 'string') {
+      // Check if geminiApiKeys contains comma-separated multiple keys
+      if (params.geminiApiKeys.includes(',')) {
+        const multipleKeys = params.geminiApiKeys.split(',').map((key: string) => key.trim()).filter((key: string) => key.length > 0);
+        return multipleKeys;
+      } else {
+        return [params.geminiApiKeys];
+      }
+    } else if (Array.isArray(params.geminiApiKeys) && params.geminiApiKeys.length > 0) {
+      return params.geminiApiKeys;
+    }
+  }
+  
+  // Priority 1.5: geminiApiKeysArray (explicit array)
+  if (params.geminiApiKeysArray && Array.isArray(params.geminiApiKeysArray) && params.geminiApiKeysArray.length > 0) {
+    return params.geminiApiKeysArray;
   }
   
   // Priority 2: Collect individual API keys (geminiApiKey, geminiApiKey2, etc.)
@@ -1566,7 +1581,7 @@ const GeminiCodebaseAnalyzerSchema = z.object({
 • research - Innovation, prototyping, academic collaboration
 
 💡 TIP: Choose the mode that matches your role or question type for the most relevant expert analysis!`),
-  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey"),
+  geminiApiKeys: z.string().min(1).optional().describe("🔑 GEMINI API KEYS: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey"),
   geminiApiKey2: z.string().min(1).optional().describe("🔑 GEMINI API KEY 2: Optional additional API key for rate limit rotation"),
   geminiApiKey3: z.string().min(1).optional().describe("🔑 GEMINI API KEY 3: Optional additional API key for rate limit rotation"),
   geminiApiKey4: z.string().min(1).optional().describe("🔑 GEMINI API KEY 4: Optional additional API key for rate limit rotation"),
@@ -1576,7 +1591,7 @@ const GeminiCodebaseAnalyzerSchema = z.object({
   geminiApiKey8: z.string().min(1).optional().describe("🔑 GEMINI API KEY 8: Optional additional API key for rate limit rotation"),
   geminiApiKey9: z.string().min(1).optional().describe("🔑 GEMINI API KEY 9: Optional additional API key for rate limit rotation"),
   geminiApiKey10: z.string().min(1).optional().describe("🔑 GEMINI API KEY 10: Optional additional API key for rate limit rotation"),
-  geminiApiKeys: z.array(z.string().min(1)).optional().describe("🔑 GEMINI API KEYS: Multiple API keys array (alternative to individual keys). When provided, the system will automatically rotate between keys to avoid rate limits. Example: ['key1', 'key2', 'key3']")
+  geminiApiKeysArray: z.array(z.string().min(1)).optional().describe("🔑 GEMINI API KEYS ARRAY: Multiple API keys array (alternative to comma-separated). When provided, the system will automatically rotate between keys to avoid rate limits. Example: ['key1', 'key2', 'key3']")
 });
 
 // Gemini Code Search Schema - for targeted, fast searches
@@ -1596,7 +1611,7 @@ const GeminiCodeSearchSchema = z.object({
 • 'SQL queries' - Find database queries`),
   fileTypes: z.array(z.string()).optional().describe("📄 FILE TYPES: Limit search to specific file extensions. Examples: ['.ts', '.js'] for TypeScript/JavaScript, ['.py'] for Python, ['.jsx', '.tsx'] for React, ['.vue'] for Vue, ['.go'] for Go. Leave empty to search all code files."),
   maxResults: z.number().min(1).max(20).optional().describe("🎯 MAX RESULTS: Maximum number of relevant code snippets to analyze (default: 5, max: 20). Higher numbers = more comprehensive but slower analysis."),
-  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey"),
+  geminiApiKeys: z.string().min(1).optional().describe("🔑 GEMINI API KEYS: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey"),
   geminiApiKey2: z.string().min(1).optional().describe("🔑 GEMINI API KEY 2: Optional additional API key for rate limit rotation"),
   geminiApiKey3: z.string().min(1).optional().describe("🔑 GEMINI API KEY 3: Optional additional API key for rate limit rotation"),
   geminiApiKey4: z.string().min(1).optional().describe("🔑 GEMINI API KEY 4: Optional additional API key for rate limit rotation"),
@@ -1606,7 +1621,7 @@ const GeminiCodeSearchSchema = z.object({
   geminiApiKey8: z.string().min(1).optional().describe("🔑 GEMINI API KEY 8: Optional additional API key for rate limit rotation"),
   geminiApiKey9: z.string().min(1).optional().describe("🔑 GEMINI API KEY 9: Optional additional API key for rate limit rotation"),
   geminiApiKey10: z.string().min(1).optional().describe("🔑 GEMINI API KEY 10: Optional additional API key for rate limit rotation"),
-  geminiApiKeys: z.array(z.string().min(1)).optional().describe("🔑 GEMINI API KEYS: Multiple API keys array (alternative to individual keys). When provided, the system will automatically rotate between keys to avoid rate limits. Example: ['key1', 'key2', 'key3']")
+  geminiApiKeysArray: z.array(z.string().min(1)).optional().describe("🔑 GEMINI API KEYS ARRAY: Multiple API keys array (alternative to comma-separated). When provided, the system will automatically rotate between keys to avoid rate limits. Example: ['key1', 'key2', 'key3']")
 });
 
 // Usage Guide Schema - helps users understand how to use this MCP server
@@ -1628,7 +1643,7 @@ const DynamicExpertModeSchema = z.object({
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! The AI will first analyze your project to create a custom expert mode, then answer your question with that specialized expertise."),
   expertiseHint: z.string().min(1).max(200).optional().describe("🎯 EXPERTISE HINT (optional): Suggest what kind of expert you need. Examples: 'React performance expert', 'Database architect', 'Security auditor', 'DevOps specialist'. Leave empty for automatic expert selection based on your project."),
-  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey"),
+  geminiApiKeys: z.string().min(1).optional().describe("🔑 GEMINI API KEYS: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey"),
   geminiApiKey2: z.string().min(1).optional().describe("🔑 GEMINI API KEY 2: Optional additional API key for rate limit rotation"),
   geminiApiKey3: z.string().min(1).optional().describe("🔑 GEMINI API KEY 3: Optional additional API key for rate limit rotation"),
   geminiApiKey4: z.string().min(1).optional().describe("🔑 GEMINI API KEY 4: Optional additional API key for rate limit rotation"),
@@ -1638,7 +1653,7 @@ const DynamicExpertModeSchema = z.object({
   geminiApiKey8: z.string().min(1).optional().describe("🔑 GEMINI API KEY 8: Optional additional API key for rate limit rotation"),
   geminiApiKey9: z.string().min(1).optional().describe("🔑 GEMINI API KEY 9: Optional additional API key for rate limit rotation"),
   geminiApiKey10: z.string().min(1).optional().describe("🔑 GEMINI API KEY 10: Optional additional API key for rate limit rotation"),
-  geminiApiKeys: z.array(z.string().min(1)).optional().describe("🔑 GEMINI API KEYS: Multiple API keys array (alternative to individual keys). When provided, the system will automatically rotate between keys to avoid rate limits. Example: ['key1', 'key2', 'key3']")
+  geminiApiKeysArray: z.array(z.string().min(1)).optional().describe("🔑 GEMINI API KEYS ARRAY: Multiple API keys array (alternative to comma-separated). When provided, the system will automatically rotate between keys to avoid rate limits. Example: ['key1', 'key2', 'key3']")
 });
 
 // Create the server

@@ -1415,6 +1415,7 @@ function validateTokenLimit(content: string, systemPrompt: string, question: str
 const GeminiCodebaseAnalyzerSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'. 💡 NEW USER? Use 'get_usage_guide' tool first to learn all capabilities!"),
+  temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
   analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded", "architecture", "cloud", "data", "monitoring", "infrastructure", "compliance", "opensource", "freelancer", "education", "research"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):
 
 📋 GENERAL MODES:
@@ -1471,6 +1472,7 @@ const GeminiCodebaseAnalyzerSchema = z.object({
 // Gemini Code Search Schema - for targeted, fast searches
 const GeminiCodeSearchSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
   searchQuery: z.string().min(1).max(500).describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. 🌍 TIP: Use English for best AI performance! 💡 NEW USER? Use 'get_usage_guide' with 'search-tips' topic first! Examples:
 • 'authentication logic' - Find login/auth code
 • 'error handling' - Find try-catch blocks
@@ -1500,6 +1502,15 @@ const UsageGuideSchema = z.object({
 💡 TIP: Start with 'overview' if you're new to this MCP server!`)
 });
 
+// Dynamic Expert Mode Generator Schema - creates custom expert modes for specific projects
+const DynamicExpertModeSchema = z.object({
+  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
+  question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! The AI will first analyze your project to create a custom expert mode, then answer your question with that specialized expertise."),
+  expertiseHint: z.string().min(1).max(200).optional().describe("🎯 EXPERTISE HINT (optional): Suggest what kind of expert you need. Examples: 'React performance expert', 'Database architect', 'Security auditor', 'DevOps specialist'. Leave empty for automatic expert selection based on your project."),
+  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. Get yours at: https://makersuite.google.com/app/apikey")
+});
+
 // Create the server
 const server = new Server({
   name: "gemini-mcp-server",
@@ -1521,8 +1532,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(UsageGuideSchema),
       },
       {
+        name: "gemini_dynamic_expert",
+        description: "🎯 DYNAMIC EXPERT MODE - **ULTIMATE ANALYSIS!** AI creates a custom expert mode specifically for your project, then provides specialized analysis. Two-step process: 1) Project analysis to generate custom expert persona, 2) Expert-level analysis using that persona. Most powerful and targeted analysis available.",
+        inputSchema: zodToJsonSchema(DynamicExpertModeSchema),
+      },
+      {
         name: "gemini_codebase_analyzer",
-        description: "🔍 COMPREHENSIVE CODEBASE ANALYSIS - Deep dive into entire project with expert analysis modes. Use for understanding architecture, getting explanations, code reviews, security audits, etc. 26 specialized analysis modes available.",
+        description: "🔍 COMPREHENSIVE CODEBASE ANALYSIS - Deep dive into entire project with expert analysis modes. Use for understanding architecture, getting explanations, code reviews, security audits, etc. 36 specialized analysis modes available.",
         inputSchema: zodToJsonSchema(GeminiCodebaseAnalyzerSchema),
       },
       {
@@ -1998,6 +2014,173 @@ Use \`get_usage_guide\` with topic "overview" to get started.`,
         };
       }
 
+    case "gemini_dynamic_expert":
+      try {
+        const params = DynamicExpertModeSchema.parse(request.params.arguments);
+        
+        // Normalize Windows paths to WSL/Linux format  
+        const normalizedPath = normalizeProjectPath(params.projectPath);
+        
+        // Use API key from environment (Smithery config) or from params
+        const apiKey = process.env.GEMINI_API_KEY || params.geminiApiKey;
+        
+        if (!apiKey) {
+          throw new Error("Gemini API key is required. Get your key from https://makersuite.google.com/app/apikey");
+        }
+
+        // Validate normalized project path exists
+        let stats;
+        try {
+          stats = await fs.stat(normalizedPath);
+        } catch (error: any) {
+          if (error.code === 'ENOENT') {
+            throw new Error(`ENOENT: no such file or directory, stat '${normalizedPath}' (original: '${params.projectPath}')`);
+          }
+          throw new Error(`Failed to access project path: ${error.message}`);
+        }
+        
+        if (!stats.isDirectory()) {
+          throw new Error(`Project path is not a directory: ${normalizedPath}`);
+        }
+
+        // Get project context with temporary ignore patterns
+        const fullContext = await prepareFullContext(normalizedPath, params.temporaryIgnore);
+
+        // STEP 1: Generate Dynamic Expert Mode
+        const expertGenerationPrompt = `# Dynamic Expert Mode Generator
+
+You are an AI system that creates custom expert personas for code analysis. Your task is to analyze the provided project and create a highly specialized expert persona that would be most effective for analyzing this specific codebase.
+
+## Project Analysis Context:
+${fullContext}
+
+## User Question:
+${params.question}
+
+## User's Expertise Hint:
+${params.expertiseHint || "No specific hint provided - auto-detect the best expert type"}
+
+## Your Task:
+Create a custom expert persona system prompt that:
+1. Identifies the most relevant expertise needed for this project
+2. Considers the specific technologies, patterns, and architecture used
+3. Tailors the expert knowledge to the project's domain and complexity
+4. Optimizes for answering the user's specific question
+
+## Output Format:
+Return ONLY a complete system prompt that starts with "You are a **[Expert Title]**" and includes:
+- Expert title and specialization
+- Relevant expertise areas for this specific project
+- Analysis framework tailored to the project's characteristics
+- Deliverables that match the project's needs
+- Technology focus based on what's actually used in the project
+
+Make the expert persona highly specific to this project's stack, patterns, and domain. The more targeted, the better the analysis will be.`;
+
+        // Initialize Gemini for expert generation
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ 
+          model: "gemini-2.5-pro",
+          generationConfig: {
+            maxOutputTokens: 4096,
+            temperature: 0.3, // Lower temperature for more consistent expert generation
+            topK: 40,
+            topP: 0.95,
+          }
+        });
+
+        // Validate token limit for expert generation
+        validateTokenLimit(fullContext, '', expertGenerationPrompt);
+
+        // Generate the custom expert mode
+        const expertResult = await retryWithBackoff(() => model.generateContent(expertGenerationPrompt));
+        const expertResponse = await expertResult.response;
+        const customExpertPrompt = expertResponse.text();
+
+        // STEP 2: Use the Custom Expert for Analysis
+        const finalAnalysisPrompt = `${customExpertPrompt}
+
+PROJECT CONTEXT:
+${fullContext}
+
+USER QUESTION:
+${params.question}
+
+Provide a comprehensive analysis using your specialized expertise that's perfectly tailored to this project's characteristics, technologies, and requirements.`;
+
+        // Validate token limit for final analysis
+        validateTokenLimit(fullContext, customExpertPrompt, params.question);
+
+        // Generate the final analysis with custom expert
+        const finalResult = await retryWithBackoff(() => model.generateContent(finalAnalysisPrompt));
+        const finalResponse = await finalResult.response;
+        const analysis = finalResponse.text();
+
+        const filesProcessed = fullContext.split('--- File:').length - 1;
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `# Dynamic Expert Analysis Results
+
+## Project: ${params.projectPath}
+*Normalized Path:* ${normalizedPath}
+
+**Question:** ${params.question}
+**Expert Mode:** Custom Generated Expert
+**Files Processed:** ${filesProcessed}  
+**Total Characters:** ${fullContext.length.toLocaleString()}
+
+---
+
+## Custom Expert Mode Used:
+\`\`\`
+${customExpertPrompt.split('\n').slice(0, 3).join('\n')}...
+\`\`\`
+
+## Analysis
+
+${analysis}
+
+---
+
+*Analysis powered by Gemini 2.5 Pro in dynamic expert mode*`,
+            },
+          ],
+          isError: false,
+        };
+      } catch (error: any) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `# Dynamic Expert Analysis - Error
+
+**Error:** ${error.message}
+
+### Troubleshooting Guide
+
+✗ **General Error**: Something went wrong during dynamic expert generation
+• Verify the project path exists and is accessible
+• Ensure your Gemini API key is valid
+• Check that the project directory contains readable files
+• Try with a smaller project or more specific question
+
+---
+
+### Need Help?
+- Check your API key at: https://makersuite.google.com/app/apikey
+- Ensure the project path is accessible to the server
+- Try with a simpler question or smaller project
+
+*Error occurred during: ${error.message.includes('ENOENT') ? 'Path validation' : error.message.includes('API key') ? 'API key validation' : 'Dynamic expert generation'}*`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
     case "gemini_codebase_analyzer":
       try {
         const params = GeminiCodebaseAnalyzerSchema.parse(request.params.arguments);
@@ -2027,8 +2210,8 @@ Use \`get_usage_guide\` with topic "overview" to get started.`,
           throw new Error(`Project path is not a directory: ${normalizedPath}`);
         }
 
-        // Prepare project context using normalized path
-        const fullContext = await prepareFullContext(normalizedPath);
+        // Prepare project context using normalized path and temporary ignore patterns
+        const fullContext = await prepareFullContext(normalizedPath, params.temporaryIgnore);
         
         if (fullContext.length === 0) {
           throw new Error("No readable files found in the project directory");
@@ -2194,7 +2377,8 @@ ${troubleshootingTips.join('\n')}
           normalizedPath, 
           params.searchQuery, 
           params.fileTypes, 
-          maxResults
+          maxResults,
+          params.temporaryIgnore
         );
         
         if (searchResult.snippets.length === 0) {
@@ -2378,7 +2562,8 @@ async function findRelevantCodeSnippets(
   projectPath: string, 
   searchQuery: string, 
   fileTypes?: string[], 
-  maxResults: number = 5
+  maxResults: number = 5,
+  temporaryIgnore: string[] = []
 ): Promise<{ snippets: Array<{file: string, content: string, relevance: string}>, totalFiles: number }> {
   try {
     let gitignoreRules: string[] = [];
@@ -2407,6 +2592,7 @@ async function findRelevantCodeSnippets(
         cwd: projectPath,
         ignore: [
           ...gitignoreRules,
+          ...temporaryIgnore, // Add temporary ignore patterns
           'node_modules/**',
           '.git/**',
           '*.log',
@@ -2491,7 +2677,7 @@ async function findRelevantCodeSnippets(
 }
 
 // Helper function to prepare full context
-async function prepareFullContext(projectPath: string): Promise<string> {
+async function prepareFullContext(projectPath: string, temporaryIgnore: string[] = []): Promise<string> {
   try {
     let gitignoreRules: string[] = [];
     
@@ -2507,22 +2693,26 @@ async function prepareFullContext(projectPath: string): Promise<string> {
       // No .gitignore file, continue
     }
 
+    // Combine default ignore patterns with gitignore rules and temporary ignore
+    const allIgnorePatterns = [
+      ...gitignoreRules,
+      ...temporaryIgnore, // Add temporary ignore patterns
+      'node_modules/**',
+      '.git/**',
+      '*.log',
+      '.env*',
+      'dist/**',
+      'build/**',
+      '*.map',
+      '*.lock',
+      '.cache/**',
+      'coverage/**'
+    ];
+
     // Scan all files in the project
     const files = await glob('**/*', {
       cwd: projectPath,
-      ignore: [
-        ...gitignoreRules,
-        'node_modules/**',
-        '.git/**',
-        '*.log',
-        '.env*',
-        'dist/**',
-        'build/**',
-        '*.map',
-        '*.lock',
-        '.cache/**',
-        'coverage/**'
-      ],
+      ignore: allIgnorePatterns,
       nodir: true
     });
 

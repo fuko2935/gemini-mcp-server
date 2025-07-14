@@ -945,7 +945,7 @@ function normalizeProjectPath(projectPath: string): string {
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
-  question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'"),
+  question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'. 💡 NEW USER? Use 'get_usage_guide' tool first to learn all capabilities!"),
   analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):
 
 📋 GENERAL MODES:
@@ -988,7 +988,7 @@ const GeminiCodebaseAnalyzerSchema = z.object({
 // Gemini Code Search Schema - for targeted, fast searches
 const GeminiCodeSearchSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
-  searchQuery: z.string().min(1).max(500).describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. Examples:
+  searchQuery: z.string().min(1).max(500).describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. 💡 NEW USER? Use 'get_usage_guide' with 'search-tips' topic first! Examples:
 • 'authentication logic' - Find login/auth code
 • 'error handling' - Find try-catch blocks
 • 'database connection' - Find DB setup
@@ -1004,10 +1004,24 @@ const GeminiCodeSearchSchema = z.object({
   geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. Get yours at: https://makersuite.google.com/app/apikey")
 });
 
+// Usage Guide Schema - helps users understand how to use this MCP server
+const UsageGuideSchema = z.object({
+  topic: z.enum(["overview", "getting-started", "analysis-modes", "search-tips", "examples", "troubleshooting"]).optional().describe(`📖 HELP TOPIC (choose what you need help with):
+• overview - What this MCP server does and its capabilities
+• getting-started - First steps and basic usage
+• analysis-modes - Detailed guide to all 26 analysis modes
+• search-tips - How to write effective search queries
+• examples - Real-world usage examples and workflows
+• troubleshooting - Common issues and solutions
+
+💡 TIP: Start with 'overview' if you're new to this MCP server!`)
+});
+
 // Create the server
 const server = new Server({
   name: "gemini-mcp-server",
   version: "1.0.0",
+  description: "🚀 GEMINI AI CODEBASE ASSISTANT - Your expert coding companion with 26 specialized analysis modes! 💡 START HERE: Use 'get_usage_guide' tool to learn all capabilities."
 }, {
   capabilities: {
     tools: {},
@@ -1019,13 +1033,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
+        name: "get_usage_guide",
+        description: "📖 GET USAGE GUIDE - **START HERE!** Learn how to use this MCP server effectively. Essential for understanding all capabilities, analysis modes, and workflows. Use this first if you're new to the server.",
+        inputSchema: zodToJsonSchema(UsageGuideSchema),
+      },
+      {
         name: "gemini_codebase_analyzer",
-        description: "Analyze any codebase with Gemini AI - scans all project files and provides comprehensive analysis, architecture insights, bug detection, and answers to specific questions about the code.",
+        description: "🔍 COMPREHENSIVE CODEBASE ANALYSIS - Deep dive into entire project with expert analysis modes. Use for understanding architecture, getting explanations, code reviews, security audits, etc. 26 specialized analysis modes available.",
         inputSchema: zodToJsonSchema(GeminiCodebaseAnalyzerSchema),
       },
       {
         name: "gemini_code_search",
-        description: "Fast, targeted search through your codebase using Gemini AI - finds specific code patterns, functions, or features quickly by analyzing only relevant parts of your project.",
+        description: "⚡ FAST TARGETED SEARCH - Quickly find specific code patterns, functions, or features. Use when you know what you're looking for but need to locate it fast. Perfect for finding specific implementations.",
         inputSchema: zodToJsonSchema(GeminiCodeSearchSchema),
       },
     ],
@@ -1035,6 +1054,416 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // Tool execution handler
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   switch (request.params.name) {
+    case "get_usage_guide":
+      try {
+        const params = UsageGuideSchema.parse(request.params.arguments);
+        const topic = params.topic || "overview";
+        
+        const guides = {
+          overview: `# 🚀 Gemini AI Codebase Assistant - Overview
+
+## What This MCP Server Does
+This is your expert coding companion with **26 specialized analysis modes** and **2 powerful tools**:
+
+### 🔍 **gemini_codebase_analyzer** - Deep Analysis
+- Comprehensive codebase analysis with expert system prompts
+- 26 specialized modes: frontend, backend, security, devops, etc.
+- Perfect for understanding architecture, code reviews, explanations
+- Processes entire project context for thorough insights
+
+### ⚡ **gemini_code_search** - Fast Search  
+- Targeted search for specific code patterns or functions
+- RAG-like approach for quick location of specific implementations
+- Ideal when you know what you're looking for
+
+### 📖 **get_usage_guide** - This Help System
+- Learn how to use all features effectively
+- Get examples, tips, and troubleshooting help
+
+## 🎯 Quick Start Workflow
+1. **New to project?** → Use \`gemini_codebase_analyzer\` with \`onboarding\` mode
+2. **Building feature?** → Use \`implementation\` mode  
+3. **Finding bugs?** → Use \`debugging\` mode
+4. **Quick search?** → Use \`gemini_code_search\` tool
+5. **Need help?** → Use \`get_usage_guide\` with specific topics
+
+## 💡 Pro Tips
+- Always use \`.\` for current directory (most common)
+- Choose the right analysis mode for your expertise level
+- Use search first for specific code, analyzer for broad understanding
+- All tools work with any programming language and framework`,
+
+          "getting-started": `# 🎯 Getting Started with Gemini AI Codebase Assistant
+
+## Step 1: Choose Your Tool
+- **New to codebase?** → Start with \`gemini_codebase_analyzer\` 
+- **Looking for specific code?** → Use \`gemini_code_search\`
+- **Need help?** → Use \`get_usage_guide\`
+
+## Step 2: Set Project Path
+- **Most common**: Use \`.\` for current directory
+- **Full path**: \`/home/user/project\` or \`C:\\Users\\Name\\Project\`
+- **Security**: Only workspace directories allowed
+
+## Step 3: Choose Analysis Mode (for analyzer)
+**Beginner-friendly modes:**
+- \`onboarding\` - Perfect for new developers
+- \`explanation\` - Educational explanations
+- \`general\` - Balanced analysis (default)
+
+**Expert modes:**
+- \`security\` - Vulnerability assessment
+- \`performance\` - Optimization focus
+- \`devops\` - CI/CD and infrastructure
+
+## Step 4: Ask Great Questions
+**Good questions:**
+- "How does authentication work in this project?"
+- "What are the main components and their relationships?"
+- "Find all API endpoints and their purposes"
+- "Explain the database schema and relationships"
+
+**Search examples:**
+- "authentication logic"
+- "API routes"
+- "database models"
+- "error handling"
+
+## Step 5: Get Your API Key
+- Visit: https://makersuite.google.com/app/apikey
+- Or set in environment: \`GEMINI_API_KEY=your_key\``,
+
+          "analysis-modes": `# 🎯 Complete Guide to 26 Analysis Modes
+
+## 📋 GENERAL MODES (Perfect for beginners)
+- **\`general\`** - Balanced analysis for any question
+- **\`explanation\`** - Educational explanations for learning
+- **\`onboarding\`** - New developer guidance and getting started  
+- **\`review\`** - Code review and quality assessment
+- **\`audit\`** - Comprehensive codebase examination
+
+## 🔧 DEVELOPMENT MODES (For building features)
+- **\`implementation\`** - Building new features step-by-step
+- **\`refactoring\`** - Code improvement and restructuring
+- **\`debugging\`** - Bug hunting and troubleshooting
+- **\`testing\`** - Test strategy and quality assurance
+- **\`documentation\`** - Technical writing and API docs
+- **\`migration\`** - Legacy modernization and upgrades
+
+## 🎨 SPECIALIZATION MODES (Technology-specific)
+- **\`frontend\`** - React/Vue/Angular, modern web UI/UX
+- **\`backend\`** - Node.js/Python, APIs, microservices
+- **\`mobile\`** - React Native/Flutter, native apps
+- **\`database\`** - SQL/NoSQL, optimization, schema design
+- **\`devops\`** - CI/CD, infrastructure, deployment
+- **\`security\`** - Vulnerability assessment, secure coding
+
+## 🚀 ADVANCED MODES (Expert-level)
+- **\`api\`** - API design and developer experience
+- **\`apex\`** - Production-ready implementation (zero defects)
+- **\`gamedev\`** - JavaScript game development optimization
+- **\`aiml\`** - Machine learning, AI systems, MLOps
+- **\`startup\`** - MVP development, rapid prototyping
+- **\`enterprise\`** - Large-scale systems, corporate integration
+- **\`blockchain\`** - Web3, smart contracts, DeFi
+- **\`embedded\`** - IoT, hardware programming, edge computing
+
+## 💡 Mode Selection Tips
+- **Learning?** → \`explanation\` or \`onboarding\`
+- **Building?** → \`implementation\` or technology-specific mode
+- **Debugging?** → \`debugging\` or \`security\`
+- **Optimizing?** → \`performance\` or \`refactoring\`
+- **Deploying?** → \`devops\` or \`enterprise\``,
+
+          "search-tips": `# 🔍 Master Search Queries for Best Results
+
+## 🎯 Effective Search Patterns
+
+### Code Structure Searches
+- "class definitions" - Find all class declarations
+- "function exports" - Find exported functions  
+- "import statements" - Find all imports
+- "interface definitions" - Find TypeScript interfaces
+
+### Feature-Specific Searches
+- "authentication logic" - Find login/auth code
+- "API endpoints" - Find route definitions
+- "database queries" - Find SQL/DB operations
+- "error handling" - Find try-catch blocks
+- "validation logic" - Find input validation
+
+### Framework-Specific Searches
+- "React components" - Find React/JSX components
+- "Vue components" - Find Vue.js components
+- "Express routes" - Find Express.js routes
+- "Django models" - Find Django model definitions
+- "Spring controllers" - Find Spring Boot controllers
+
+### Technology Searches
+- "async functions" - Find async/await patterns
+- "Promise chains" - Find promise-based code
+- "event listeners" - Find event handling
+- "HTTP requests" - Find API calls
+- "configuration files" - Find config/settings
+
+## 📄 File Type Filtering Examples
+
+### Web Development
+- \`['.js', '.ts']\` - JavaScript/TypeScript
+- \`['.jsx', '.tsx']\` - React components
+- \`['.vue']\` - Vue.js components
+- \`['.html', '.css']\` - Frontend markup/styles
+
+### Backend Development  
+- \`['.py']\` - Python code
+- \`['.java']\` - Java code
+- \`['.go']\` - Go code
+- \`['.rs']\` - Rust code
+
+### Configuration
+- \`['.json', '.yaml', '.yml']\` - Config files
+- \`['.env']\` - Environment variables
+- \`['.dockerfile']\` - Docker files
+
+## 🚀 Pro Search Tips
+1. **Be specific**: "user authentication middleware" vs "auth"
+2. **Use quotes**: "exact function name" for precise matches
+3. **Combine terms**: "database connection pool setup"
+4. **Filter smartly**: Limit file types to relevant extensions
+5. **Start broad**: Begin with general terms, then get specific`,
+
+          examples: `# 💡 Real-World Usage Examples & Workflows
+
+## 🎯 Common Workflows
+
+### 1. **New Developer Onboarding**
+\`\`\`
+Tool: gemini_codebase_analyzer
+Path: .
+Mode: onboarding
+Question: "I'm new to this project. Can you explain the architecture, main components, and how to get started?"
+\`\`\`
+
+### 2. **Feature Implementation**
+\`\`\`
+Tool: gemini_codebase_analyzer  
+Path: .
+Mode: implementation
+Question: "I need to add user authentication. Show me the current auth system and how to extend it."
+\`\`\`
+
+### 3. **Bug Investigation**
+\`\`\`
+Tool: gemini_code_search
+Path: .
+Query: "error handling user login"
+FileTypes: ['.js', '.ts']
+\`\`\`
+Then:
+\`\`\`
+Tool: gemini_codebase_analyzer
+Path: .
+Mode: debugging  
+Question: "Users can't login. I found the auth code - can you help debug this issue?"
+\`\`\`
+
+### 4. **Security Review**
+\`\`\`
+Tool: gemini_codebase_analyzer
+Path: .
+Mode: security
+Question: "Perform a security audit. Find potential vulnerabilities in authentication, input validation, and data handling."
+\`\`\`
+
+### 5. **Performance Optimization**
+\`\`\`
+Tool: gemini_codebase_analyzer
+Path: .
+Mode: performance
+Question: "The app is slow. Analyze for performance bottlenecks and suggest optimizations."
+\`\`\`
+
+## 🔍 Search-First Workflows
+
+### Finding Specific Code
+\`\`\`
+Tool: gemini_code_search
+Path: .
+Query: "API route definitions"
+FileTypes: ['.js', '.ts']
+MaxResults: 10
+\`\`\`
+
+### Database Operations
+\`\`\`
+Tool: gemini_code_search
+Path: .
+Query: "SQL queries database operations"
+FileTypes: ['.py', '.js', '.java']
+MaxResults: 15
+\`\`\`
+
+## 🎨 Technology-Specific Examples
+
+### React Project Analysis
+\`\`\`
+Tool: gemini_codebase_analyzer
+Path: .
+Mode: frontend
+Question: "Analyze this React app's component structure, state management, and suggest improvements."
+\`\`\`
+
+### DevOps Pipeline Review
+\`\`\`
+Tool: gemini_codebase_analyzer
+Path: .
+Mode: devops
+Question: "Review the CI/CD pipeline and suggest optimizations for faster deployments."
+\`\`\`
+
+### Database Schema Review
+\`\`\`
+Tool: gemini_codebase_analyzer
+Path: .
+Mode: database
+Question: "Analyze the database schema, relationships, and suggest optimizations."
+\`\`\`
+
+## 🚀 Advanced Workflows
+
+### Code Review Process
+1. **Overview**: Use \`review\` mode for general assessment
+2. **Deep dive**: Use \`security\` mode for vulnerabilities  
+3. **Performance**: Use \`performance\` mode for optimization
+4. **Documentation**: Use \`documentation\` mode for docs review
+
+### Architecture Analysis
+1. **Start**: Use \`general\` mode for overview
+2. **Specific**: Use technology-specific modes (frontend/backend)
+3. **Scale**: Use \`enterprise\` mode for large systems
+4. **Deploy**: Use \`devops\` mode for deployment strategy`,
+
+          troubleshooting: `# 🔧 Troubleshooting Common Issues
+
+## ❌ Common Problems & Solutions
+
+### "Path Not Found" Error
+**Problem**: \`ENOENT: no such file or directory\`
+**Solutions**:
+- Use \`.\` for current directory (most common)
+- Check if you're in the right directory
+- Verify path exists and is accessible
+- For Windows: Use forward slashes or escape backslashes
+
+### "Access Denied" Error  
+**Problem**: \`Path is not in allowed workspace directory\`
+**Solutions**:
+- Use \`.\` for current directory
+- Ensure path is under allowed directories (Projects, Users, etc.)
+- Avoid system directories (Windows, Program Files, etc.)
+
+### "API Key Required" Error
+**Problem**: \`Gemini API key is required\`
+**Solutions**:
+- Get key from: https://makersuite.google.com/app/apikey
+- Set in environment: \`GEMINI_API_KEY=your_key\`
+- Or pass in tool parameters
+
+### "Too Many Requests" Error
+**Problem**: \`429 Too Many Requests\`
+**Solutions**:
+- Wait a moment and try again
+- Use smaller projects or more specific questions
+- Consider upgrading your Gemini API plan
+
+### "Transport is Closed" Error
+**Problem**: MCP connection lost
+**Solutions**:
+- Reconnect to the MCP server
+- Check if server is still running
+- Try refreshing your MCP client connection
+
+## 🎯 Best Practices for Success
+
+### Project Path Tips
+- ✅ Use \`.\` for current directory
+- ✅ Use absolute paths when needed
+- ❌ Don't use system directories  
+- ❌ Don't use relative paths like \`../\`
+
+### Question Writing Tips
+- ✅ Be specific and clear
+- ✅ Ask one main question at a time
+- ✅ Provide context when helpful
+- ❌ Don't ask vague questions like "fix this"
+
+### Analysis Mode Selection
+- ✅ Choose mode that matches your expertise
+- ✅ Use \`onboarding\` if new to project
+- ✅ Use specific modes for focused analysis
+- ❌ Don't always use \`general\` mode
+
+### Search Query Tips
+- ✅ Use specific terms and patterns
+- ✅ Filter by relevant file types
+- ✅ Start with 5-10 results, increase if needed
+- ❌ Don't use overly broad search terms
+
+## 🚀 Performance Tips
+
+### For Large Projects
+- Use \`gemini_code_search\` for specific code location
+- Use focused analysis modes rather than \`general\`
+- Ask specific questions rather than broad ones
+- Consider breaking large questions into smaller ones
+
+### For Better Results
+- Provide context in your questions
+- Choose the right analysis mode for your needs
+- Use appropriate file type filtering
+- Be patient - comprehensive analysis takes time
+
+## 📞 Getting Help
+1. **Start with**: \`get_usage_guide\` with \`overview\` topic
+2. **Learn modes**: Use \`analysis-modes\` topic
+3. **Search help**: Use \`search-tips\` topic
+4. **Still stuck?** Try \`examples\` topic for workflows`
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: guides[topic as keyof typeof guides],
+            },
+          ],
+          isError: false,
+        };
+      } catch (error: any) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `# Usage Guide Error
+
+**Error:** ${error.message}
+
+### Available Topics:
+- overview - What this MCP server does
+- getting-started - First steps and basic usage  
+- analysis-modes - Guide to all 26 modes
+- search-tips - Effective search strategies
+- examples - Real-world workflows
+- troubleshooting - Common issues and solutions
+
+**Example usage:**
+Use \`get_usage_guide\` with topic "overview" to get started.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
     case "gemini_codebase_analyzer":
       try {
         const params = GeminiCodebaseAnalyzerSchema.parse(request.params.arguments);

@@ -1414,7 +1414,7 @@ function validateTokenLimit(content: string, systemPrompt: string, question: str
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
-  question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'. 💡 NEW USER? Use 'get_usage_guide' tool first to learn all capabilities!"),
+  question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'. 💡 NEW USER? Use 'get_usage_guide' tool first to learn all capabilities!"),
   analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded", "architecture", "cloud", "data", "monitoring", "infrastructure", "compliance", "opensource", "freelancer", "education", "research"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):
 
 📋 GENERAL MODES:
@@ -1471,7 +1471,7 @@ const GeminiCodebaseAnalyzerSchema = z.object({
 // Gemini Code Search Schema - for targeted, fast searches
 const GeminiCodeSearchSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
-  searchQuery: z.string().min(1).max(500).describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. 💡 NEW USER? Use 'get_usage_guide' with 'search-tips' topic first! Examples:
+  searchQuery: z.string().min(1).max(500).describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. 🌍 TIP: Use English for best AI performance! 💡 NEW USER? Use 'get_usage_guide' with 'search-tips' topic first! Examples:
 • 'authentication logic' - Find login/auth code
 • 'error handling' - Find try-catch blocks
 • 'database connection' - Find DB setup
@@ -1600,17 +1600,24 @@ This is your expert coding companion with **26 specialized analysis modes** and 
 - \`devops\` - CI/CD and infrastructure
 
 ## Step 4: Ask Great Questions
-**Good questions:**
+🌍 **IMPORTANT: Use English for best AI performance!**
+All AI models (including Gemini) perform significantly better with English prompts. The AI understands other languages but gives more accurate, detailed, and faster responses in English.
+
+**Good questions (in English):**
 - "How does authentication work in this project?"
 - "What are the main components and their relationships?"
 - "Find all API endpoints and their purposes"
 - "Explain the database schema and relationships"
+- "What are the security vulnerabilities in this code?"
+- "How can I optimize the performance of this application?"
 
-**Search examples:**
+**Search examples (in English):**
 - "authentication logic"
 - "API routes"
 - "database models"
 - "error handling"
+- "validation functions"
+- "configuration files"
 
 ## Step 5: Get Your API Key
 - Visit: https://makersuite.google.com/app/apikey
@@ -1723,11 +1730,15 @@ This is your expert coding companion with **26 specialized analysis modes** and 
 - \`['.dockerfile']\` - Docker files
 
 ## 🚀 Pro Search Tips
+🌍 **LANGUAGE TIP: Always use English for search queries!**
+AI models perform significantly better with English terms. Even for non-English codebases, use English search terms for better results.
+
 1. **Be specific**: "user authentication middleware" vs "auth"
 2. **Use quotes**: "exact function name" for precise matches
 3. **Combine terms**: "database connection pool setup"
 4. **Filter smartly**: Limit file types to relevant extensions
-5. **Start broad**: Begin with general terms, then get specific`,
+5. **Start broad**: Begin with general terms, then get specific
+6. **Use English**: "error handling" not "hata yönetimi", "database" not "veritabanı"`,
 
           examples: `# 💡 Real-World Usage Examples & Workflows
 
@@ -1913,10 +1924,12 @@ Question: "Analyze the database schema, relationships, and suggest optimizations
 - ❌ Don't use relative paths like \`../\`
 
 ### Question Writing Tips
+- ✅ **Write in English** for best AI performance
 - ✅ Be specific and clear
 - ✅ Ask one main question at a time
 - ✅ Provide context when helpful
 - ❌ Don't ask vague questions like "fix this"
+- ❌ Don't use non-English terms (use "authentication" not "kimlik doğrulama")
 
 ### Analysis Mode Selection
 - ✅ Choose mode that matches your expertise

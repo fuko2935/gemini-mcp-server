@@ -14,6 +14,47 @@ import path from "path";
 import { glob } from "glob";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import winston from "winston";
+
+// Initialize logging system
+const logsDir = path.join(process.cwd(), 'logs');
+
+// Ensure logs directory exists
+const initializeLogsDirectory = async () => {
+  try {
+    await fs.access(logsDir);
+  } catch {
+    await fs.mkdir(logsDir, { recursive: true });
+  }
+};
+
+await initializeLogsDirectory();
+
+const logger = winston.createLogger({
+  level: 'debug',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ 
+      filename: path.join(logsDir, 'error.log'), 
+      level: 'error' 
+    }),
+    new winston.transports.File({ 
+      filename: path.join(logsDir, 'activity.log') 
+    }),
+  ],
+});
+
+if (process.env.NODE_ENV !== 'production') {
+  logger.add(new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.simple()
+    )
+  }));
+}
 
 // Security: Restricted paths for safety
 const DANGEROUS_PATHS = [
@@ -1374,21 +1415,49 @@ async function retryWithApiKeyRotation<T>(
   let lastError: Error | undefined;
   let attemptCount = 0;
   
+  logger.info('Starting API request with key rotation.', { 
+    totalKeys: apiKeys.length,
+    maxDurationMs: maxDurationMs 
+  });
+  
   while (Date.now() - startTime < maxDurationMs) {
     attemptCount++;
     const currentApiKey = apiKeys[currentKeyIndex];
+    
+    logger.debug('Attempting API request', {
+      attempt: attemptCount,
+      keyIndex: currentKeyIndex + 1,
+      totalKeys: apiKeys.length,
+      remainingTimeMs: maxDurationMs - (Date.now() - startTime)
+    });
     
     try {
       const model = createModelFn(currentApiKey);
       const result = await requestFn(model);
       
       if (attemptCount > 1) {
-        console.log(`✅ Success after ${attemptCount} attempts using API key ${currentKeyIndex + 1}/${apiKeys.length}`);
+        logger.info(`API request successful after ${attemptCount} attempts.`, {
+          succeededWithKeyIndex: currentKeyIndex + 1,
+          totalAttempts: attemptCount,
+          totalKeys: apiKeys.length,
+          durationMs: Date.now() - startTime
+        });
+      } else {
+        logger.debug('API request successful on first attempt', {
+          keyIndex: currentKeyIndex + 1
+        });
       }
       
       return result;
     } catch (error: any) {
       lastError = error;
+      
+      logger.warn('API request failed', {
+        attempt: attemptCount,
+        keyIndex: currentKeyIndex + 1,
+        error: error.message,
+        errorCode: error.code || 'unknown'
+      });
       
       // Check if it's a rate limit or invalid key error
       const isRotatableError = error.message && (
@@ -1407,7 +1476,15 @@ async function retryWithApiKeyRotation<T>(
         const remainingTime = Math.ceil((maxDurationMs - (Date.now() - startTime)) / 1000);
         const errorType = error.message.includes('API key not valid') ? 'Invalid API key' : 'Rate limit hit';
         
-        console.log(`🔄 ${errorType} with API key ${previousKeyIndex > apiKeys.length ? apiKeys.length : previousKeyIndex}/${apiKeys.length}. Rotating to key ${currentKeyIndex + 1}/${apiKeys.length}. Attempt ${attemptCount}, ${remainingTime}s remaining`);
+        logger.warn(`API Key Rotation Triggered: ${errorType}`, {
+          attempt: attemptCount,
+          failedKeyIndex: previousKeyIndex,
+          nextKeyIndex: currentKeyIndex + 1,
+          totalKeys: apiKeys.length,
+          remainingTimeSeconds: remainingTime,
+          errorType: errorType,
+          originalError: error.message
+        });
         
         // Small delay before trying next key
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -1415,11 +1492,24 @@ async function retryWithApiKeyRotation<T>(
       }
       
       // For non-rate-limit errors, throw immediately
+      logger.error('Non-rotatable API error encountered.', { 
+        error: error.message, 
+        attempt: attemptCount,
+        keyIndex: currentKeyIndex + 1,
+        errorType: 'non-rotatable'
+      });
       throw error;
     }
   }
   
   // 4 minutes expired
+  logger.error('API request failed after timeout with all keys.', {
+    totalAttempts: attemptCount,
+    totalKeys: apiKeys.length,
+    durationMs: Date.now() - startTime,
+    lastError: lastError?.message,
+    status: 'timeout'
+  });
   throw new Error(`Gemini API requests failed after 4 minutes with ${attemptCount} attempts across ${apiKeys.length} API keys. All keys hit rate limits. Last error: ${lastError?.message || 'Unknown error'}`);
 }
 
@@ -1653,11 +1743,16 @@ const DynamicExpertModeSchema = z.object({
   ...generateApiKeyFields()
 });
 
+// Schema for reading log files
+const ReadLogFileSchema = z.object({
+  filename: z.enum(["activity.log", "error.log"]).describe("📄 LOG FILE NAME: Choose which log file to read. 'activity.log' contains all operations and debug info. 'error.log' contains only errors and critical issues."),
+});
+
 // Create the server
 const server = new Server({
   name: "gemini-mcp-server",
   version: "1.0.0",
-  description: "🚀 GEMINI AI CODEBASE ASSISTANT - Your expert coding companion with 26 specialized analysis modes! 💡 START HERE: Use 'get_usage_guide' tool to learn all capabilities."
+  description: "🚀 GEMINI AI CODEBASE ASSISTANT - Your expert coding companion with 36 specialized analysis modes! 💡 START HERE: Use 'get_usage_guide' tool to learn all capabilities."
 }, {
   capabilities: {
     tools: {},
@@ -1693,12 +1788,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "⚡ FAST TARGETED SEARCH - Quickly find specific code patterns, functions, or features. Use when you know what you're looking for but need to locate it fast. Perfect for finding specific implementations.",
         inputSchema: zodToJsonSchema(GeminiCodeSearchSchema),
       },
+      {
+        name: "read_log_file",
+        description: "📄 READ LOG FILE - Read the contents of a server log file ('activity.log' or 'error.log'). Useful for debugging the server itself, monitoring API key rotation, and troubleshooting issues.",
+        inputSchema: zodToJsonSchema(ReadLogFileSchema),
+      },
     ],
   };
 });
 
 // Tool execution handler
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  logger.info('Received tool call request', { 
+    toolName: request.params.name, 
+    hasArguments: !!request.params.arguments,
+    timestamp: new Date().toISOString()
+  });
+  
   switch (request.params.name) {
     case "get_usage_guide":
       try {
@@ -2850,7 +2956,67 @@ ${troubleshootingTips.join('\n')}
         };
       }
 
+    case "read_log_file":
+      try {
+        logger.info('Received request to read log file', { filename: request.params.arguments?.filename });
+        
+        const params = ReadLogFileSchema.parse(request.params.arguments);
+        const logContent = await readLogFileLogic(params.filename);
+        
+        logger.info('Log file read successfully', { filename: params.filename, contentLength: logContent.length });
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: `# Log file: ${params.filename}
+
+## Log Content
+
+\`\`\`
+${logContent}
+\`\`\`
+
+---
+
+**Log file location:** \`logs/${params.filename}\`  
+**Last updated:** ${new Date().toISOString()}
+
+### Available log files:
+- **activity.log**: All operations, API calls, and debug information
+- **error.log**: Only errors and critical issues
+
+*Use this tool to monitor API key rotation, debug issues, and track server operations.*`,
+            },
+          ],
+          isError: false,
+        };
+      } catch (error: any) {
+        logger.error('Error in read_log_file tool', { error: error.message });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `# Error reading log file
+
+**Error:** ${error.message}
+
+### Troubleshooting:
+- Check if the log file exists in the \`logs/\` directory
+- Ensure the server has read permissions
+- Try reading the other log file (\`activity.log\` or \`error.log\`)
+
+### Available log files:
+- **activity.log**: All operations and debug info
+- **error.log**: Only errors and critical issues`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
     default:
+      logger.warn('Unknown tool called', { toolName: request.params.name });
       throw new Error(`Unknown tool: ${request.params.name}`);
   }
 });
@@ -3037,12 +3203,41 @@ async function prepareFullContext(projectPath: string, temporaryIgnore: string[]
   }
 }
 
+// Helper function to read log files securely
+async function readLogFileLogic(filename: 'activity.log' | 'error.log'): Promise<string> {
+  const logDir = path.join(process.cwd(), 'logs');
+  const filePath = path.join(logDir, filename);
+
+  // Security check: ensure the resolved path is within the logs directory
+  if (!path.resolve(filePath).startsWith(path.resolve(logDir))) {
+    throw new Error('Access denied: Invalid log file path.');
+  }
+
+  try {
+    const content = await fs.readFile(filePath, 'utf-8');
+    return content;
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return `Log file '${filename}' not found. It may not have been created yet or the server hasn't logged any data to this file.`;
+    }
+    throw new Error(`Failed to read log file '${filename}': ${error.message}`);
+  }
+}
+
 // Start the server (Smithery will run this directly)
 (async () => {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Gemini MCP Server running on stdio");
+  logger.info("Gemini MCP Server running on stdio", { 
+    serverName: "gemini-mcp-server",
+    version: "1.0.0",
+    transport: "stdio",
+    logsDirectory: logsDir
+  });
 })().catch((error) => {
-  console.error("Failed to start server:", error);
+  logger.error("Failed to start server:", { 
+    error: error.message, 
+    stack: error.stack 
+  });
   process.exit(1);
 });

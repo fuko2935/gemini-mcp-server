@@ -3,18 +3,18 @@ startCommand:
   configSchema:
     type: object
     required:
-      - geminiApiKey
+      - geminiApiKeys
     properties:
-      geminiApiKey:
+      geminiApiKeys:
         type: string
-        description: "Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)"
+        description: "Your Gemini API keys from Google AI Studio. You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey"
   exampleConfig:
-    geminiApiKey: "your-api-key-here"
+    geminiApiKeys: "your-api-key-here,your-second-key,your-third-key"
   commandFunction: |-
     (config) => ({
       command: 'node',
       args: ['dist/simple-server.js'],
       env: {
-        GEMINI_API_KEY: config.geminiApiKey
+        GEMINI_API_KEY: config.geminiApiKeys
       }
     })

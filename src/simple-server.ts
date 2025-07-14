@@ -944,19 +944,64 @@ function normalizeProjectPath(projectPath: string): string {
 
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
-  projectPath: z.string().min(1).describe("Path to your project directory (e.g., 'C:\\Users\\YourName\\Projects\\MyProject' or '/home/user/Projects/MyProject'). Only workspace/project directories are allowed for security."),
-  question: z.string().min(1).max(2000).describe("Your question about the codebase"),
-  analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded"]).optional().describe("Analysis mode: general (default), implementation (feature building), refactoring (code improvement), explanation (educational), debugging (bug hunting), audit (comprehensive review), security (vulnerability assessment), performance (optimization focus), testing (test strategy), documentation (docs generation), migration (legacy modernization), review (code review), onboarding (developer guidance), api (API design), apex (production-ready implementation), gamedev (game development), aiml (AI/ML systems), devops (infrastructure & CI/CD), mobile (React Native/Flutter), frontend (React/Vue/Angular), backend (Node.js/Python), database (SQL/NoSQL), startup (MVP development), enterprise (large-scale systems), blockchain (Web3/DeFi), embedded (IoT/hardware)"),
-  geminiApiKey: z.string().min(1).optional().describe("Your Gemini API key (can be set via environment)")
+  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'"),
+  analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):
+
+📋 GENERAL MODES:
+• general (default) - Balanced analysis for any question
+• explanation - Educational explanations for learning
+• onboarding - New developer guidance and getting started
+• review - Code review and quality assessment
+• audit - Comprehensive codebase examination
+
+🔧 DEVELOPMENT MODES:
+• implementation - Building new features step-by-step
+• refactoring - Code improvement and restructuring
+• debugging - Bug hunting and troubleshooting
+• testing - Test strategy and quality assurance
+• documentation - Technical writing and API docs
+• migration - Legacy modernization and upgrades
+
+🎨 SPECIALIZATION MODES:
+• frontend - React/Vue/Angular, modern web UI/UX
+• backend - Node.js/Python, APIs, microservices
+• mobile - React Native/Flutter, native apps
+• database - SQL/NoSQL, optimization, schema design
+• devops - CI/CD, infrastructure, deployment
+• security - Vulnerability assessment, secure coding
+
+🚀 ADVANCED MODES:
+• api - API design and developer experience
+• apex - Production-ready implementation (zero defects)
+• gamedev - JavaScript game development optimization
+• aiml - Machine learning, AI systems, MLOps
+• startup - MVP development, rapid prototyping
+• enterprise - Large-scale systems, corporate integration
+• blockchain - Web3, smart contracts, DeFi
+• embedded - IoT, hardware programming, edge computing
+
+💡 TIP: Choose the mode that matches your role or question type for the most relevant expert analysis!`),
+  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. Get yours at: https://makersuite.google.com/app/apikey")
 });
 
 // Gemini Code Search Schema - for targeted, fast searches
 const GeminiCodeSearchSchema = z.object({
-  projectPath: z.string().min(1).describe("Path to your project directory. Only workspace/project directories are allowed for security."),
-  searchQuery: z.string().min(1).max(500).describe("Specific code pattern, function, or feature to find (e.g., 'authentication logic', 'error handling', 'database connection')"),
-  fileTypes: z.array(z.string()).optional().describe("File extensions to search (e.g., ['.ts', '.js', '.py']). Leave empty for all code files."),
-  maxResults: z.number().min(1).max(20).optional().describe("Maximum number of relevant code snippets to analyze (default: 5)"),
-  geminiApiKey: z.string().min(1).optional().describe("Your Gemini API key (can be set via environment)")
+  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  searchQuery: z.string().min(1).max(500).describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. Examples:
+• 'authentication logic' - Find login/auth code
+• 'error handling' - Find try-catch blocks
+• 'database connection' - Find DB setup
+• 'API endpoints' - Find route definitions
+• 'React components' - Find UI components
+• 'class UserService' - Find specific class
+• 'async function' - Find async functions
+• 'import express' - Find Express usage
+• 'useState hook' - Find React state
+• 'SQL queries' - Find database queries`),
+  fileTypes: z.array(z.string()).optional().describe("📄 FILE TYPES: Limit search to specific file extensions. Examples: ['.ts', '.js'] for TypeScript/JavaScript, ['.py'] for Python, ['.jsx', '.tsx'] for React, ['.vue'] for Vue, ['.go'] for Go. Leave empty to search all code files."),
+  maxResults: z.number().min(1).max(20).optional().describe("🎯 MAX RESULTS: Maximum number of relevant code snippets to analyze (default: 5, max: 20). Higher numbers = more comprehensive but slower analysis."),
+  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. Get yours at: https://makersuite.google.com/app/apikey")
 });
 
 // Create the server

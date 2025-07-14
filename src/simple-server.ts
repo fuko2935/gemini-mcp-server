@@ -1302,13 +1302,105 @@ function normalizeProjectPath(projectPath: string): string {
   return normalizedPath;
 }
 
+// Helper function to resolve API keys from multiple sources
+function resolveApiKeys(params: any): string[] {
+  const keys: string[] = [];
+  
+  // Priority 1: geminiApiKeys array
+  if (params.geminiApiKeys && params.geminiApiKeys.length > 0) {
+    return params.geminiApiKeys;
+  }
+  
+  // Priority 2: Collect individual API keys (geminiApiKey, geminiApiKey2, etc.)
+  if (params.geminiApiKey) keys.push(params.geminiApiKey);
+  if (params.geminiApiKey2) keys.push(params.geminiApiKey2);
+  if (params.geminiApiKey3) keys.push(params.geminiApiKey3);
+  if (params.geminiApiKey4) keys.push(params.geminiApiKey4);
+  if (params.geminiApiKey5) keys.push(params.geminiApiKey5);
+  if (params.geminiApiKey6) keys.push(params.geminiApiKey6);
+  if (params.geminiApiKey7) keys.push(params.geminiApiKey7);
+  if (params.geminiApiKey8) keys.push(params.geminiApiKey8);
+  if (params.geminiApiKey9) keys.push(params.geminiApiKey9);
+  if (params.geminiApiKey10) keys.push(params.geminiApiKey10);
+  
+  if (keys.length > 0) {
+    return keys;
+  }
+  
+  // Priority 3: Environment variable
+  if (process.env.GEMINI_API_KEY) {
+    return [process.env.GEMINI_API_KEY];
+  }
+  
+  return [];
+}
+
 // Retry utility for handling Gemini API rate limits
+// API Key Rotation System with Infinite Retry for 4 Minutes
+async function retryWithApiKeyRotation<T>(
+  createModelFn: (apiKey: string) => any,
+  requestFn: (model: any) => Promise<T>,
+  apiKeys: string[],
+  maxDurationMs: number = 4 * 60 * 1000 // 4 minutes total timeout
+): Promise<T> {
+  const startTime = Date.now();
+  let currentKeyIndex = 0;
+  let lastError: Error | undefined;
+  let attemptCount = 0;
+  
+  while (Date.now() - startTime < maxDurationMs) {
+    attemptCount++;
+    const currentApiKey = apiKeys[currentKeyIndex];
+    
+    try {
+      const model = createModelFn(currentApiKey);
+      const result = await requestFn(model);
+      
+      if (attemptCount > 1) {
+        console.log(`✅ Success after ${attemptCount} attempts using API key ${currentKeyIndex + 1}/${apiKeys.length}`);
+      }
+      
+      return result;
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a rate limit error
+      const isRateLimit = error.message && (
+        error.message.includes('429') || 
+        error.message.includes('Too Many Requests') || 
+        error.message.includes('quota') || 
+        error.message.includes('rate limit') ||
+        error.message.includes('exceeded your current quota')
+      );
+      
+      if (isRateLimit) {
+        // Rotate to next API key
+        currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+        const remainingTime = Math.ceil((maxDurationMs - (Date.now() - startTime)) / 1000);
+        
+        console.log(`🔄 Rate limit hit with API key ${currentKeyIndex === 0 ? apiKeys.length : currentKeyIndex}/${apiKeys.length}. Rotating to key ${currentKeyIndex + 1}/${apiKeys.length}. Attempt ${attemptCount}, ${remainingTime}s remaining`);
+        
+        // Small delay before trying next key
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      
+      // For non-rate-limit errors, throw immediately
+      throw error;
+    }
+  }
+  
+  // 4 minutes expired
+  throw new Error(`Gemini API requests failed after 4 minutes with ${attemptCount} attempts across ${apiKeys.length} API keys. All keys hit rate limits. Last error: ${lastError?.message || 'Unknown error'}`);
+}
+
+// Backward compatibility wrapper for single API key
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number = 24, // 24 attempts = 2 minutes (5 seconds * 24 = 120 seconds)
   delayMs: number = 5000 // 5 seconds between retries
 ): Promise<T> {
-  let lastError: Error;
+  let lastError: Error | undefined;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -1343,7 +1435,7 @@ async function retryWithBackoff<T>(
   }
   
   // This should never be reached, but just in case
-  throw lastError!;
+  throw lastError || new Error('Unknown error occurred');
 }
 
 // Gemini 2.5 Pro Token Calculator
@@ -1466,7 +1558,17 @@ const GeminiCodebaseAnalyzerSchema = z.object({
 • research - Innovation, prototyping, academic collaboration
 
 💡 TIP: Choose the mode that matches your role or question type for the most relevant expert analysis!`),
-  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. Get yours at: https://makersuite.google.com/app/apikey")
+  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. Get yours at: https://makersuite.google.com/app/apikey"),
+  geminiApiKey2: z.string().min(1).optional().describe("🔑 GEMINI API KEY 2: Optional additional API key for rate limit rotation"),
+  geminiApiKey3: z.string().min(1).optional().describe("🔑 GEMINI API KEY 3: Optional additional API key for rate limit rotation"),
+  geminiApiKey4: z.string().min(1).optional().describe("🔑 GEMINI API KEY 4: Optional additional API key for rate limit rotation"),
+  geminiApiKey5: z.string().min(1).optional().describe("🔑 GEMINI API KEY 5: Optional additional API key for rate limit rotation"),
+  geminiApiKey6: z.string().min(1).optional().describe("🔑 GEMINI API KEY 6: Optional additional API key for rate limit rotation"),
+  geminiApiKey7: z.string().min(1).optional().describe("🔑 GEMINI API KEY 7: Optional additional API key for rate limit rotation"),
+  geminiApiKey8: z.string().min(1).optional().describe("🔑 GEMINI API KEY 8: Optional additional API key for rate limit rotation"),
+  geminiApiKey9: z.string().min(1).optional().describe("🔑 GEMINI API KEY 9: Optional additional API key for rate limit rotation"),
+  geminiApiKey10: z.string().min(1).optional().describe("🔑 GEMINI API KEY 10: Optional additional API key for rate limit rotation"),
+  geminiApiKeys: z.array(z.string().min(1)).optional().describe("🔑 GEMINI API KEYS: Multiple API keys array (alternative to individual keys). When provided, the system will automatically rotate between keys to avoid rate limits. Example: ['key1', 'key2', 'key3']")
 });
 
 // Gemini Code Search Schema - for targeted, fast searches
@@ -1486,7 +1588,17 @@ const GeminiCodeSearchSchema = z.object({
 • 'SQL queries' - Find database queries`),
   fileTypes: z.array(z.string()).optional().describe("📄 FILE TYPES: Limit search to specific file extensions. Examples: ['.ts', '.js'] for TypeScript/JavaScript, ['.py'] for Python, ['.jsx', '.tsx'] for React, ['.vue'] for Vue, ['.go'] for Go. Leave empty to search all code files."),
   maxResults: z.number().min(1).max(20).optional().describe("🎯 MAX RESULTS: Maximum number of relevant code snippets to analyze (default: 5, max: 20). Higher numbers = more comprehensive but slower analysis."),
-  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. Get yours at: https://makersuite.google.com/app/apikey")
+  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. Get yours at: https://makersuite.google.com/app/apikey"),
+  geminiApiKey2: z.string().min(1).optional().describe("🔑 GEMINI API KEY 2: Optional additional API key for rate limit rotation"),
+  geminiApiKey3: z.string().min(1).optional().describe("🔑 GEMINI API KEY 3: Optional additional API key for rate limit rotation"),
+  geminiApiKey4: z.string().min(1).optional().describe("🔑 GEMINI API KEY 4: Optional additional API key for rate limit rotation"),
+  geminiApiKey5: z.string().min(1).optional().describe("🔑 GEMINI API KEY 5: Optional additional API key for rate limit rotation"),
+  geminiApiKey6: z.string().min(1).optional().describe("🔑 GEMINI API KEY 6: Optional additional API key for rate limit rotation"),
+  geminiApiKey7: z.string().min(1).optional().describe("🔑 GEMINI API KEY 7: Optional additional API key for rate limit rotation"),
+  geminiApiKey8: z.string().min(1).optional().describe("🔑 GEMINI API KEY 8: Optional additional API key for rate limit rotation"),
+  geminiApiKey9: z.string().min(1).optional().describe("🔑 GEMINI API KEY 9: Optional additional API key for rate limit rotation"),
+  geminiApiKey10: z.string().min(1).optional().describe("🔑 GEMINI API KEY 10: Optional additional API key for rate limit rotation"),
+  geminiApiKeys: z.array(z.string().min(1)).optional().describe("🔑 GEMINI API KEYS: Multiple API keys array (alternative to individual keys). When provided, the system will automatically rotate between keys to avoid rate limits. Example: ['key1', 'key2', 'key3']")
 });
 
 // Usage Guide Schema - helps users understand how to use this MCP server
@@ -1508,7 +1620,17 @@ const DynamicExpertModeSchema = z.object({
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! The AI will first analyze your project to create a custom expert mode, then answer your question with that specialized expertise."),
   expertiseHint: z.string().min(1).max(200).optional().describe("🎯 EXPERTISE HINT (optional): Suggest what kind of expert you need. Examples: 'React performance expert', 'Database architect', 'Security auditor', 'DevOps specialist'. Leave empty for automatic expert selection based on your project."),
-  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. Get yours at: https://makersuite.google.com/app/apikey")
+  geminiApiKey: z.string().min(1).optional().describe("🔑 GEMINI API KEY: Optional if set in environment variables. Get yours at: https://makersuite.google.com/app/apikey"),
+  geminiApiKey2: z.string().min(1).optional().describe("🔑 GEMINI API KEY 2: Optional additional API key for rate limit rotation"),
+  geminiApiKey3: z.string().min(1).optional().describe("🔑 GEMINI API KEY 3: Optional additional API key for rate limit rotation"),
+  geminiApiKey4: z.string().min(1).optional().describe("🔑 GEMINI API KEY 4: Optional additional API key for rate limit rotation"),
+  geminiApiKey5: z.string().min(1).optional().describe("🔑 GEMINI API KEY 5: Optional additional API key for rate limit rotation"),
+  geminiApiKey6: z.string().min(1).optional().describe("🔑 GEMINI API KEY 6: Optional additional API key for rate limit rotation"),
+  geminiApiKey7: z.string().min(1).optional().describe("🔑 GEMINI API KEY 7: Optional additional API key for rate limit rotation"),
+  geminiApiKey8: z.string().min(1).optional().describe("🔑 GEMINI API KEY 8: Optional additional API key for rate limit rotation"),
+  geminiApiKey9: z.string().min(1).optional().describe("🔑 GEMINI API KEY 9: Optional additional API key for rate limit rotation"),
+  geminiApiKey10: z.string().min(1).optional().describe("🔑 GEMINI API KEY 10: Optional additional API key for rate limit rotation"),
+  geminiApiKeys: z.array(z.string().min(1)).optional().describe("🔑 GEMINI API KEYS: Multiple API keys array (alternative to individual keys). When provided, the system will automatically rotate between keys to avoid rate limits. Example: ['key1', 'key2', 'key3']")
 });
 
 // Create the server
@@ -2021,11 +2143,11 @@ Use \`get_usage_guide\` with topic "overview" to get started.`,
         // Normalize Windows paths to WSL/Linux format  
         const normalizedPath = normalizeProjectPath(params.projectPath);
         
-        // Use API key from environment (Smithery config) or from params
-        const apiKey = process.env.GEMINI_API_KEY || params.geminiApiKey;
+        // Resolve API keys from multiple sources
+        const apiKeys = resolveApiKeys(params);
         
-        if (!apiKey) {
-          throw new Error("Gemini API key is required. Get your key from https://makersuite.google.com/app/apikey");
+        if (apiKeys.length === 0) {
+          throw new Error("At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey");
         }
 
         // Validate normalized project path exists
@@ -2077,23 +2199,28 @@ Return ONLY a complete system prompt that starts with "You are a **[Expert Title
 
 Make the expert persona highly specific to this project's stack, patterns, and domain. The more targeted, the better the analysis will be.`;
 
-        // Initialize Gemini for expert generation
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ 
-          model: "gemini-2.5-pro",
-          generationConfig: {
-            maxOutputTokens: 4096,
-            temperature: 0.3, // Lower temperature for more consistent expert generation
-            topK: 40,
-            topP: 0.95,
-          }
-        });
-
         // Validate token limit for expert generation
         validateTokenLimit(fullContext, '', expertGenerationPrompt);
 
-        // Generate the custom expert mode
-        const expertResult = await retryWithBackoff(() => model.generateContent(expertGenerationPrompt));
+        // Generate the custom expert mode using API key rotation
+        const createModelFn = (apiKey: string) => {
+          const genAI = new GoogleGenerativeAI(apiKey);
+          return genAI.getGenerativeModel({ 
+            model: "gemini-2.5-pro",
+            generationConfig: {
+              maxOutputTokens: 4096,
+              temperature: 0.3, // Lower temperature for more consistent expert generation
+              topK: 40,
+              topP: 0.95,
+            }
+          });
+        };
+
+        const expertResult = await retryWithApiKeyRotation(
+          createModelFn,
+          (model) => model.generateContent(expertGenerationPrompt),
+          apiKeys
+        ) as any;
         const expertResponse = await expertResult.response;
         const customExpertPrompt = expertResponse.text();
 
@@ -2111,8 +2238,12 @@ Provide a comprehensive analysis using your specialized expertise that's perfect
         // Validate token limit for final analysis
         validateTokenLimit(fullContext, customExpertPrompt, params.question);
 
-        // Generate the final analysis with custom expert
-        const finalResult = await retryWithBackoff(() => model.generateContent(finalAnalysisPrompt));
+        // Generate the final analysis with custom expert using API key rotation
+        const finalResult = await retryWithApiKeyRotation(
+          createModelFn,
+          (model) => model.generateContent(finalAnalysisPrompt),
+          apiKeys
+        ) as any;
         const finalResponse = await finalResult.response;
         const analysis = finalResponse.text();
 
@@ -2188,11 +2319,11 @@ ${analysis}
         // Normalize Windows paths to WSL/Linux format  
         const normalizedPath = normalizeProjectPath(params.projectPath);
         
-        // Use API key from environment (Smithery config) or from params
-        const apiKey = process.env.GEMINI_API_KEY || params.geminiApiKey;
+        // Resolve API keys from multiple sources
+        const apiKeys = resolveApiKeys(params);
         
-        if (!apiKey) {
-          throw new Error("Gemini API key is required. Get your key from https://makersuite.google.com/app/apikey");
+        if (apiKeys.length === 0) {
+          throw new Error("At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey");
         }
 
         // Validate normalized project path exists (with better error handling)
@@ -2217,18 +2348,6 @@ ${analysis}
           throw new Error("No readable files found in the project directory");
         }
 
-        // Initialize Gemini AI with optimal generation config
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ 
-          model: "gemini-2.5-pro",
-          generationConfig: {
-            maxOutputTokens: 65536,
-            temperature: 0.5,
-            topK: 40,
-            topP: 0.95,
-          }
-        });
-
         // Select appropriate system prompt based on analysis mode
         const analysisMode = params.analysisMode || "general";
         const systemPrompt = SYSTEM_PROMPTS[analysisMode];
@@ -2245,8 +2364,25 @@ ${params.question}`;
         // Validate token limit before sending to Gemini 2.5 Pro
         validateTokenLimit(fullContext, systemPrompt, params.question);
 
-        // Send to Gemini AI with retry mechanism for rate limits
-        const result = await retryWithBackoff(() => model.generateContent(megaPrompt));
+        // Send to Gemini AI with API key rotation for rate limits
+        const createModelFn = (apiKey: string) => {
+          const genAI = new GoogleGenerativeAI(apiKey);
+          return genAI.getGenerativeModel({ 
+            model: "gemini-2.5-pro",
+            generationConfig: {
+              maxOutputTokens: 65536,
+              temperature: 0.5,
+              topK: 40,
+              topP: 0.95,
+            }
+          });
+        };
+
+        const result = await retryWithApiKeyRotation(
+          createModelFn,
+          (model) => model.generateContent(megaPrompt),
+          apiKeys
+        ) as any;
         const response = await result.response;
         const analysis = response.text();
 
@@ -2349,11 +2485,11 @@ ${troubleshootingTips.join('\n')}
         // Normalize Windows paths to WSL/Linux format  
         const normalizedPath = normalizeProjectPath(params.projectPath);
         
-        // Use API key from environment (Smithery config) or from params
-        const apiKey = process.env.GEMINI_API_KEY || params.geminiApiKey;
+        // Resolve API keys from multiple sources
+        const apiKeys = resolveApiKeys(params);
         
-        if (!apiKey) {
-          throw new Error("Gemini API key is required. Get your key from https://makersuite.google.com/app/apikey");
+        if (apiKeys.length === 0) {
+          throw new Error("At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey");
         }
 
         // Validate normalized project path exists
@@ -2416,18 +2552,6 @@ The search didn't find any relevant code snippets matching your query. Try:
           searchContext += '\n\n';
         }
 
-        // Initialize Gemini AI with optimal generation config
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ 
-          model: "gemini-2.5-pro",
-          generationConfig: {
-            maxOutputTokens: 65536,
-            temperature: 0.5,
-            topK: 40,
-            topP: 0.95,
-          }
-        });
-
         const searchPrompt = `You are a senior AI Software Engineer analyzing specific code snippets from a project. Your task is to help another coding AI understand the most relevant parts of the codebase related to their search query.
 
 SEARCH QUERY: "${params.searchQuery}"
@@ -2452,8 +2576,25 @@ RESPONSE FORMAT:
         // Validate token limit before sending to Gemini 2.5 Pro
         validateTokenLimit(searchContext, '', params.searchQuery);
 
-        // Send to Gemini AI with retry mechanism for rate limits
-        const result = await retryWithBackoff(() => model.generateContent(searchPrompt));
+        // Send to Gemini AI with API key rotation for rate limits
+        const createModelFn = (apiKey: string) => {
+          const genAI = new GoogleGenerativeAI(apiKey);
+          return genAI.getGenerativeModel({ 
+            model: "gemini-2.5-pro",
+            generationConfig: {
+              maxOutputTokens: 65536,
+              temperature: 0.5,
+              topK: 40,
+              topP: 0.95,
+            }
+          });
+        };
+
+        const result = await retryWithApiKeyRotation(
+          createModelFn,
+          (model) => model.generateContent(searchPrompt),
+          apiKeys
+        ) as any;
         const response = await result.response;
         const analysis = response.text();
 

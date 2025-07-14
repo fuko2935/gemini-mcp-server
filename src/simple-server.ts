@@ -26,6 +26,9 @@ const DANGEROUS_PATHS = [
 const ALLOWED_PATH_PATTERNS = [
   /^\/mnt\/c\/(?:Users|Projects|Development|Dev|Code|Workspace)/i,
   /^\/home\/[^\/]+\/(?:Projects|Development|Dev|Code|Workspace)/i,
+  /^\/mnt\/c\/Projects\/.*/i,  // Allow any subdirectory under /mnt/c/Projects
+  /^\/mnt\/c\/Users\/.*/i,     // Allow any subdirectory under /mnt/c/Users
+  /^\/home\/[^\/]+\/(?:Projects|Development|Dev|Code|Workspace)\/.*/i, // Allow subdirectories
   /^\.{1,2}$/,  // Allow current and parent directory
   /^\.\//, // Allow relative paths from current directory
 ];

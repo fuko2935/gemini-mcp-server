@@ -1390,21 +1390,24 @@ async function retryWithApiKeyRotation<T>(
     } catch (error: any) {
       lastError = error;
       
-      // Check if it's a rate limit error
-      const isRateLimit = error.message && (
+      // Check if it's a rate limit or invalid key error
+      const isRotatableError = error.message && (
         error.message.includes('429') || 
         error.message.includes('Too Many Requests') || 
         error.message.includes('quota') || 
         error.message.includes('rate limit') ||
-        error.message.includes('exceeded your current quota')
+        error.message.includes('exceeded your current quota') ||
+        error.message.includes('API key not valid')
       );
       
-      if (isRateLimit) {
+      if (isRotatableError) {
         // Rotate to next API key
+        const previousKeyIndex = currentKeyIndex + 1;
         currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
         const remainingTime = Math.ceil((maxDurationMs - (Date.now() - startTime)) / 1000);
+        const errorType = error.message.includes('API key not valid') ? 'Invalid API key' : 'Rate limit hit';
         
-        console.log(`🔄 Rate limit hit with API key ${currentKeyIndex === 0 ? apiKeys.length : currentKeyIndex}/${apiKeys.length}. Rotating to key ${currentKeyIndex + 1}/${apiKeys.length}. Attempt ${attemptCount}, ${remainingTime}s remaining`);
+        console.log(`🔄 ${errorType} with API key ${previousKeyIndex > apiKeys.length ? apiKeys.length : previousKeyIndex}/${apiKeys.length}. Rotating to key ${currentKeyIndex + 1}/${apiKeys.length}. Attempt ${attemptCount}, ${remainingTime}s remaining`);
         
         // Small delay before trying next key
         await new Promise(resolve => setTimeout(resolve, 1000));

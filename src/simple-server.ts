@@ -1349,9 +1349,13 @@ function resolveApiKeys(params: any): string[] {
     return keys;
   }
   
-  // Priority 3: Environment variable
+  // Priority 4: Environment variable
   if (process.env.GEMINI_API_KEY) {
-    return [process.env.GEMINI_API_KEY];
+    const envKeys = process.env.GEMINI_API_KEY;
+    if (envKeys.includes(',')) {
+      return envKeys.split(',').map((key: string) => key.trim()).filter((key: string) => key.length > 0);
+    }
+    return [envKeys];
   }
   
   return [];

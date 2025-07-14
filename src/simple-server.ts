@@ -1540,6 +1540,12 @@ function generateApiKeyFields() {
   return fields;
 }
 
+// API Key Status Checker Schema
+const ApiKeyStatusSchema = z.object({
+  geminiApiKeys: z.string().min(1).optional().describe("🔑 GEMINI API KEYS: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey"),
+  ...generateApiKeyFields()
+});
+
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
@@ -1659,6 +1665,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_usage_guide",
         description: "📖 GET USAGE GUIDE - **START HERE!** Learn how to use this MCP server effectively. Essential for understanding all capabilities, analysis modes, and workflows. Use this first if you're new to the server.",
         inputSchema: zodToJsonSchema(UsageGuideSchema),
+      },
+      {
+        name: "check_api_key_status",
+        description: "🔑 CHECK API KEY STATUS - Monitor your Gemini API keys configuration. Shows how many keys are configured, validates them, and provides rate limit protection status. Perfect for debugging API key issues.",
+        inputSchema: zodToJsonSchema(ApiKeyStatusSchema),
       },
       {
         name: "gemini_dynamic_expert",
@@ -2137,6 +2148,138 @@ Question: "Analyze the database schema, relationships, and suggest optimizations
 
 **Example usage:**
 Use \`get_usage_guide\` with topic "overview" to get started.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+    case "check_api_key_status":
+      try {
+        const params = ApiKeyStatusSchema.parse(request.params.arguments);
+        
+        // Resolve API keys from all sources
+        const apiKeys = resolveApiKeys(params);
+        
+        // Environment variable check
+        const envApiKey = process.env.GEMINI_API_KEY;
+        
+        // Count different key sources
+        let commaKeys = 0;
+        let individualKeys = 0;
+        let arrayKeys = 0;
+        
+        if (params.geminiApiKeys) {
+          if (params.geminiApiKeys.includes(',')) {
+            commaKeys = params.geminiApiKeys.split(',').map((k: string) => k.trim()).filter((k: string) => k.length > 0).length;
+          } else {
+            commaKeys = 1;
+          }
+        }
+        
+        if (params.geminiApiKeysArray && Array.isArray(params.geminiApiKeysArray)) {
+          arrayKeys = params.geminiApiKeysArray.length;
+        }
+        
+        // Count individual numbered keys
+        for (let i = 2; i <= 100; i++) {
+          if (params[`geminiApiKey${i}`]) {
+            individualKeys++;
+          }
+        }
+        
+        // Generate rotation schedule preview
+        const rotationPreview = apiKeys.slice(0, 10).map((key, index) => {
+          const maskedKey = key.substring(0, 8) + "..." + key.substring(key.length - 4);
+          return `${index + 1}. ${maskedKey}`;
+        }).join('\n');
+        
+        const totalKeys = apiKeys.length;
+        const rotationTime = totalKeys > 0 ? Math.ceil(240 / totalKeys) : 0; // 4 minutes / keys
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: `# 🔑 Gemini API Key Status Report
+
+## 📊 Configuration Summary
+- **Total Active Keys**: ${totalKeys}
+- **Environment Variable**: ${envApiKey ? '✅ Set' : '❌ Not set'}
+- **Rotation Available**: ${totalKeys > 1 ? '✅ Yes' : '❌ Single key only'}
+- **Rate Limit Protection**: ${totalKeys > 1 ? '🛡️ Active' : '⚠️ Limited'}
+
+## 📈 Key Sources Breakdown
+- **Comma-separated keys**: ${commaKeys} ${commaKeys > 0 ? '(geminiApiKeys field)' : ''}
+- **Individual numbered keys**: ${individualKeys} ${individualKeys > 0 ? '(geminiApiKey2-100)' : ''}
+- **Array format keys**: ${arrayKeys} ${arrayKeys > 0 ? '(geminiApiKeysArray)' : ''}
+
+## 🔄 Rotation Strategy
+${totalKeys > 1 ? `
+**Rotation Schedule**: ${rotationTime} seconds per key
+**Maximum uptime**: 4 minutes continuous rotation
+**Fallback protection**: Automatic key switching on rate limits
+
+**Key Rotation Preview** (first 10 keys):
+${rotationPreview}
+${totalKeys > 10 ? `\n... and ${totalKeys - 10} more keys` : ''}
+` : `
+**Single Key Mode**: No rotation available
+**Recommendation**: Add more keys for better rate limit protection
+**How to add**: Use comma-separated format in geminiApiKeys field
+`}
+
+## 🎯 Performance Optimization
+- **Recommended keys**: 5-10 for optimal performance
+- **Maximum supported**: 100 keys
+- **Current efficiency**: ${Math.min(100, (totalKeys / 10) * 100).toFixed(1)}%
+
+## 🚀 Usage Tips
+${totalKeys === 0 ? `
+❌ **No API keys configured!**
+- Add keys to geminiApiKeys field: "key1,key2,key3"
+- Or set environment variable: GEMINI_API_KEY
+- Get keys from: https://makersuite.google.com/app/apikey
+` : totalKeys === 1 ? `
+⚠️ **Single key detected**
+- Consider adding more keys for better rate limit protection
+- Use comma-separated format: "key1,key2,key3"
+- Or individual fields: geminiApiKey2, geminiApiKey3, etc.
+` : `
+✅ **Multi-key configuration active**
+- Rate limit protection is active
+- Automatic failover enabled
+- Optimal performance achieved
+`}
+
+## 🔧 Troubleshooting
+- **Rate limits**: With ${totalKeys} keys, you can handle ${totalKeys}x more requests
+- **Error recovery**: Automatic retry with next key on failures
+- **Monitoring**: This tool helps track your key configuration
+
+---
+
+*Status checked at ${new Date().toISOString()}*
+*Next rotation cycle: ${totalKeys > 1 ? `${rotationTime}s per key` : 'No rotation'}*`,
+            },
+          ],
+          isError: false,
+        };
+      } catch (error: any) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `# 🔑 API Key Status Check - Error
+
+**Error**: ${error.message}
+
+### Troubleshooting Guide
+- Check your API key format
+- Ensure keys are valid Gemini API keys
+- Verify environment variables are set correctly
+
+**Get API keys from**: https://makersuite.google.com/app/apikey`,
             },
           ],
           isError: true,

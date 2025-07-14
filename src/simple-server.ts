@@ -986,6 +986,71 @@ async function retryWithBackoff<T>(
   throw lastError!;
 }
 
+// Gemini 2.5 Pro Token Calculator
+// Approximate token calculation for Gemini 2.5 Pro (1M token limit)
+function calculateTokens(text: string): number {
+  // Gemini uses a similar tokenization to GPT models
+  // Approximate: 1 token ≈ 4 characters for most text
+  // More accurate estimation considering word boundaries and special characters
+  
+  // Basic character count / 4 estimation
+  const basicEstimate = Math.ceil(text.length / 4);
+  
+  // Adjust for common patterns:
+  // - Code has more tokens (more symbols, brackets, etc.)
+  // - Newlines and spaces count as tokens
+  // - Special characters in code increase token count
+  
+  const newlineCount = (text.match(/\n/g) || []).length;
+  const spaceCount = (text.match(/ /g) || []).length;
+  const specialCharsCount = (text.match(/[{}[\]();,.<>\/\\=+\-*&|!@#$%^`~]/g) || []).length;
+  
+  // Adjustment factors for better accuracy
+  const adjustedEstimate = basicEstimate + 
+    Math.ceil(newlineCount * 0.5) + 
+    Math.ceil(spaceCount * 0.1) + 
+    Math.ceil(specialCharsCount * 0.2);
+  
+  return adjustedEstimate;
+}
+
+// Token validation for Gemini 2.5 Pro
+function validateTokenLimit(content: string, systemPrompt: string, question: string): void {
+  const GEMINI_25_PRO_TOKEN_LIMIT = 1000000; // 1 million tokens
+  
+  const contentTokens = calculateTokens(content);
+  const systemTokens = calculateTokens(systemPrompt);
+  const questionTokens = calculateTokens(question);
+  
+  const totalTokens = contentTokens + systemTokens + questionTokens;
+  
+  if (totalTokens > GEMINI_25_PRO_TOKEN_LIMIT) {
+    const exceededBy = totalTokens - GEMINI_25_PRO_TOKEN_LIMIT;
+    throw new Error(`Token limit exceeded! 
+
+📊 **Token Usage Breakdown:**
+- Project content: ${contentTokens.toLocaleString()} tokens
+- System prompt: ${systemTokens.toLocaleString()} tokens  
+- Your question: ${questionTokens.toLocaleString()} tokens
+- **Total: ${totalTokens.toLocaleString()} tokens**
+
+❌ **Limit exceeded by: ${exceededBy.toLocaleString()} tokens**
+🚫 **Gemini 2.5 Pro limit: ${GEMINI_25_PRO_TOKEN_LIMIT.toLocaleString()} tokens**
+
+💡 **Solutions:**
+- Use more specific questions to reduce context
+- Focus on specific directories or file types
+- Use 'gemini_code_search' tool for targeted searches
+- Break large questions into smaller parts
+- Consider analyzing subdirectories separately
+
+**Current project size: ${Math.round(content.length / 1024)} KB**`);
+  }
+  
+  // Log token usage for monitoring
+  console.log(`📊 Token usage: ${totalTokens.toLocaleString()}/${GEMINI_25_PRO_TOKEN_LIMIT.toLocaleString()} (${Math.round((totalTokens/GEMINI_25_PRO_TOKEN_LIMIT)*100)}%)`);
+}
+
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
@@ -1428,6 +1493,22 @@ Question: "Analyze the database schema, relationships, and suggest optimizations
 - Consider upgrading your Gemini API plan
 - Break large questions into smaller parts
 
+### "Token Limit Exceeded" Error
+**Problem**: \`Token limit exceeded! Gemini 2.5 Pro limit: 1,000,000 tokens\`
+**What it means**: Your project + question is too large for Gemini's context window
+**Solutions**:
+- Use \`gemini_code_search\` for specific code location first
+- Focus on specific directories or file types
+- Ask more targeted questions instead of broad analysis
+- Break large questions into smaller, focused parts
+- Analyze subdirectories separately
+- Use file type filtering to reduce context size
+
+**Token breakdown helps you understand:**
+- How much space your project content takes
+- How much your question contributes
+- Exactly how much you need to reduce
+
 ### "Transport is Closed" Error
 **Problem**: MCP connection lost
 **Solutions**:
@@ -1576,6 +1657,9 @@ ${fullContext}
 
 CODING AI QUESTION:
 ${params.question}`;
+
+        // Validate token limit before sending to Gemini 2.5 Pro
+        validateTokenLimit(fullContext, systemPrompt, params.question);
 
         // Send to Gemini AI with retry mechanism for rate limits
         const result = await retryWithBackoff(() => model.generateContent(megaPrompt));
@@ -1779,6 +1863,9 @@ RESPONSE FORMAT:
 - Provide file paths and line references when relevant
 - Be concise but comprehensive
 - Focus on answering the search query specifically`;
+
+        // Validate token limit before sending to Gemini 2.5 Pro
+        validateTokenLimit(searchContext, '', params.searchQuery);
 
         // Send to Gemini AI with retry mechanism for rate limits
         const result = await retryWithBackoff(() => model.generateContent(searchPrompt));

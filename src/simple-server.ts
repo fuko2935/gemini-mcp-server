@@ -1326,7 +1326,7 @@ function resolveApiKeys(params: any): string[] {
     return params.geminiApiKeysArray;
   }
   
-  // Priority 2: Collect individual API keys (geminiApiKey, geminiApiKey2, etc.)
+  // Priority 2: Backward compatibility - check old geminiApiKey field name
   if (params.geminiApiKey) {
     // Check if geminiApiKey contains comma-separated multiple keys
     if (params.geminiApiKey.includes(',')) {

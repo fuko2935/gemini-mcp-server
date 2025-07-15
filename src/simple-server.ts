@@ -3273,7 +3273,8 @@ ${logContent}
             groupIndex: g.groupIndex,
             name: g.name,
             description: g.description,
-            reasoning: g.reasoning
+            reasoning: g.reasoning,
+            customPrompt: g.customPrompt
           })),
           totalFiles: fileTokenInfos.length,
           totalTokens: totalProjectTokens,
@@ -3305,6 +3306,7 @@ ${groups.map((group, index) => `### Group ${index + 1}${group.name ? ` - ${group
 - **Tokens:** ${group.totalTokens.toLocaleString()}
 ${group.description ? `- **Description:** ${group.description}` : ''}
 ${group.reasoning ? `- **AI Reasoning:** ${group.reasoning}` : ''}
+${group.customPrompt ? `- **🎯 Custom Expert:** ${group.customPrompt.substring(0, 150)}...` : ''}
 
 **Files in this group:**
 ${group.files.map(f => `  - ${f.filePath} (${f.tokens} tokens)`).join('\n')}
@@ -3430,7 +3432,8 @@ ${groupsData}
             groupIndex: groupData.groupIndex,
             name: groupData.name,
             description: groupData.description,
-            reasoning: groupData.reasoning
+            reasoning: groupData.reasoning,
+            customPrompt: groupData.customPrompt
           });
         }
 
@@ -3447,7 +3450,10 @@ ${groupsData}
           try {
             const groupContext = group.files.map(f => `--- File: ${f.filePath} ---\n${f.content}`).join('\n\n');
             
-            const groupPrompt = `${systemPrompt}
+            // Use custom prompt if available, otherwise fallback to system prompt
+            const effectivePrompt = group.customPrompt || systemPrompt;
+            
+            const groupPrompt = `${effectivePrompt}
 
 **GROUP CONTEXT (${index + 1}/${groups.length}):**
 This is group ${index + 1} of ${groups.length} from a large project analysis. ${group.name ? `Group Name: "${group.name}"` : ''} ${group.description ? `Group Description: ${group.description}` : ''}
@@ -3796,6 +3802,7 @@ interface FileGroup {
   name?: string;
   description?: string;
   reasoning?: string;
+  customPrompt?: string;
 }
 
 // Calculate tokens for a single file content
@@ -3878,6 +3885,14 @@ Create logical groups based on:
 4. **Analysis Context**: Consider the user's question to prioritize relevant groupings
 5. **Token Efficiency**: Maximize files per group while staying under limits
 
+**CUSTOM PROMPT REQUIREMENT:**
+For each group, you MUST create a specialized "customPrompt" that:
+- Defines a specific expert persona (e.g., "Frontend UI/UX Specialist", "Backend API Developer", "DevOps Engineer")
+- Tailors analysis focus to the group's purpose (e.g., component architecture, API design, deployment strategies)
+- Provides specific guidance for analyzing that particular group of files
+- Includes relevant technical areas and best practices for that domain
+- Ensures the prompt is highly relevant to the files in that group
+
 **OUTPUT FORMAT (JSON only):**
 \`\`\`json
 {
@@ -3887,7 +3902,8 @@ Create logical groups based on:
       "description": "Main React components and UI logic",
       "files": ["src/components/Header.tsx", "src/components/Footer.tsx"],
       "estimatedTokens": 45000,
-      "reasoning": "These UI components work together and should be analyzed as a unit"
+      "reasoning": "These UI components work together and should be analyzed as a unit",
+      "customPrompt": "You are a **Frontend UI/UX Specialist** focusing on React components. Analyze the component architecture, state management, styling patterns, and user experience aspects. Pay special attention to component reusability, props design, and accessibility. Provide insights on component structure, performance optimization, and maintainability."
     }
   ],
   "totalGroups": 3,
@@ -3952,7 +3968,8 @@ Respond with JSON only, no additional text.`;
           groupIndex: groupIndex++,
           name: aiGroup.name,
           description: aiGroup.description,
-          reasoning: aiGroup.reasoning
+          reasoning: aiGroup.reasoning,
+          customPrompt: aiGroup.customPrompt
         });
       }
     }

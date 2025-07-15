@@ -1311,11 +1311,17 @@ Execute flawlessly with JavaScript game development excellence.`,
 function normalizeProjectPath(projectPath: string, clientWorkingDirectory?: string): string {
   let normalizedPath = projectPath;
   
-  // If client working directory is provided and projectPath is relative, resolve it
-  if (clientWorkingDirectory && projectPath === '.') {
-    normalizedPath = clientWorkingDirectory;
-  } else if (clientWorkingDirectory && !path.isAbsolute(projectPath)) {
-    normalizedPath = path.resolve(clientWorkingDirectory, projectPath);
+  // Try to get client working directory from multiple sources
+  const actualClientWorkingDirectory = clientWorkingDirectory || 
+    process.env.CLIENT_WORKING_DIRECTORY || 
+    process.env.PWD || 
+    process.cwd();
+  
+  // If client working directory is available and projectPath is relative, resolve it
+  if (actualClientWorkingDirectory && projectPath === '.') {
+    normalizedPath = actualClientWorkingDirectory;
+  } else if (actualClientWorkingDirectory && !path.isAbsolute(projectPath)) {
+    normalizedPath = path.resolve(actualClientWorkingDirectory, projectPath);
   }
   
   // Convert Windows paths to WSL/Unix format

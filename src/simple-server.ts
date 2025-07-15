@@ -16,6 +16,84 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import winston from "winston";
 
+// Types for orchestrator
+interface ParsedFile {
+  path: string;
+  content: string;
+  tokens: number;
+}
+
+interface FileGroup {
+  files: ParsedFile[];
+  totalTokens: number;
+  groupIndex: number;
+  name?: string;
+}
+
+// Legacy interface for compatibility
+interface FileTokenInfo {
+  filePath: string;
+  tokens: number;
+  content?: string;
+}
+
+// Helper functions for client-side architecture
+function parseCodebaseContext(codebaseContext: string): ParsedFile[] {
+  const files: ParsedFile[] = [];
+  const fileSections = codebaseContext.split('--- File: ');
+  
+  for (let i = 1; i < fileSections.length; i++) {
+    const section = fileSections[i];
+    const firstLineEnd = section.indexOf('\n');
+    if (firstLineEnd === -1) continue;
+    
+    const filePath = section.substring(0, firstLineEnd).trim().replace(' ---', '');
+    const content = section.substring(firstLineEnd + 1);
+    
+    // Simple token estimation (rough approximation)
+    const tokens = Math.ceil(content.length / 4);
+    
+    files.push({
+      path: filePath,
+      content,
+      tokens
+    });
+  }
+  
+  return files;
+}
+
+function createFileGroups(files: ParsedFile[], maxTokensPerGroup: number): FileGroup[] {
+  const groups: FileGroup[] = [];
+  let currentGroup: FileGroup = {
+    files: [],
+    totalTokens: 0,
+    groupIndex: 0
+  };
+  
+  for (const file of files) {
+    // If adding this file would exceed the limit, start a new group
+    if (currentGroup.totalTokens + file.tokens > maxTokensPerGroup && currentGroup.files.length > 0) {
+      groups.push(currentGroup);
+      currentGroup = {
+        files: [],
+        totalTokens: 0,
+        groupIndex: groups.length
+      };
+    }
+    
+    currentGroup.files.push(file);
+    currentGroup.totalTokens += file.tokens;
+  }
+  
+  // Add the last group if it has files
+  if (currentGroup.files.length > 0) {
+    groups.push(currentGroup);
+  }
+  
+  return groups;
+}
+
 // Initialize logging system
 const logsDir = path.join(process.cwd(), 'logs');
 
@@ -1760,18 +1838,16 @@ const UsageGuideSchema = z.object({
 
 // Dynamic Expert Mode Step 1: Create Custom Expert Schema
 const DynamicExpertCreateSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
-  temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
-  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
+  codebaseContext: z.string().min(1).describe("📁 CODEBASE CONTENT: The full content of your project files concatenated together. This should include all relevant source files with their file paths as separators. Format: '--- File: path/to/file ---\\n<file content>\\n\\n'. This will be analyzed to create a custom expert."),
+  projectName: z.string().optional().describe("📋 PROJECT NAME: Optional name for your project to provide better context in the expert creation."),
   expertiseHint: z.string().min(1).max(200).optional().describe("🎯 EXPERTISE HINT (optional): Suggest what kind of expert you need. Examples: 'React performance expert', 'Database architect', 'Security auditor', 'DevOps specialist'. Leave empty for automatic expert selection based on your project."),
   ...generateApiKeyFields()
 });
 
 // Dynamic Expert Mode Step 2: Analyze with Custom Expert Schema
 const DynamicExpertAnalyzeSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
-  temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
-  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
+  codebaseContext: z.string().min(1).describe("📁 CODEBASE CONTENT: The full content of your project files concatenated together. This should include all relevant source files with their file paths as separators. Format: '--- File: path/to/file ---\\n<file content>\\n\\n'. This will be analyzed by the custom expert."),
+  projectName: z.string().optional().describe("📋 PROJECT NAME: Optional name for your project to provide better context in the analysis."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! This will be analyzed using the custom expert mode created in step 1."),
   expertPrompt: z.string().min(1).max(10000).describe("🎯 EXPERT PROMPT: The custom expert system prompt generated by 'gemini_dynamic_expert_create' tool. Copy the entire expert prompt from the previous step."),
   ...generateApiKeyFields()
@@ -1784,9 +1860,8 @@ const ReadLogFileSchema = z.object({
 
 // Project Orchestrator Step 1: Create Groups and Analysis Plan Schema
 const ProjectOrchestratorCreateSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
-  temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
-  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
+  codebaseContext: z.string().min(1).describe("📁 CODEBASE CONTENT: The full content of your project files concatenated together. This should include all relevant source files with their file paths as separators. Format: '--- File: path/to/file ---\\n<file content>\\n\\n'. This will be organized into groups."),
+  projectName: z.string().optional().describe("📋 PROJECT NAME: Optional name for your project to provide better context in the orchestrator results."),
   analysisMode: z.enum(['general', 'implementation', 'refactoring', 'explanation', 'debugging', 'audit', 'security', 'performance', 'testing', 'documentation', 'migration', 'review', 'onboarding', 'api', 'apex', 'gamedev', 'aiml', 'devops', 'mobile', 'frontend', 'backend', 'database', 'startup', 'enterprise', 'blockchain', 'embedded', 'architecture', 'cloud', 'data', 'monitoring', 'infrastructure', 'compliance', 'opensource', 'freelancer', 'education', 'research']).default('general').describe("🎯 ANALYSIS MODE: Choose the expert that best fits your needs. The orchestrator will use this mode for all file groups to ensure consistent analysis across the entire project."),
   maxTokensPerGroup: z.number().min(100000).max(950000).default(900000).optional().describe("🔢 MAX TOKENS PER GROUP: Maximum tokens per file group (default: 900K, max: 950K). Lower values create smaller groups for more detailed analysis. Higher values allow larger chunks but may hit API limits."),
   ...generateApiKeyFields()
@@ -1794,9 +1869,7 @@ const ProjectOrchestratorCreateSchema = z.object({
 
 // Project Orchestrator Step 2: Analyze with Groups Schema
 const ProjectOrchestratorAnalyzeSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
-  temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
-  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
+  projectName: z.string().optional().describe("📋 PROJECT NAME: Optional name for your project to provide better context in the analysis results."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! This will be analyzed using the file groups created in step 1."),
   analysisMode: z.enum(['general', 'implementation', 'refactoring', 'explanation', 'debugging', 'audit', 'security', 'performance', 'testing', 'documentation', 'migration', 'review', 'onboarding', 'api', 'apex', 'gamedev', 'aiml', 'devops', 'mobile', 'frontend', 'backend', 'database', 'startup', 'enterprise', 'blockchain', 'embedded', 'architecture', 'cloud', 'data', 'monitoring', 'infrastructure', 'compliance', 'opensource', 'freelancer', 'education', 'research']).default('general').describe("🎯 ANALYSIS MODE: Choose the expert that best fits your needs. Must match the mode used in step 1."),
   fileGroupsData: z.string().min(1).max(50000).describe("📦 FILE GROUPS DATA: The file groups data generated by 'project_orchestrator_create' tool. Copy the entire groups data from step 1."),
@@ -3113,9 +3186,6 @@ ${logContent}
       try {
         const params = ProjectOrchestratorCreateSchema.parse(request.params.arguments);
         
-        // Normalize Windows paths to WSL/Linux format  
-        const normalizedPath = normalizeProjectPath(params.projectPath, params.clientWorkingDirectory);
-        
         // Resolve API keys from multiple sources
         const apiKeys = resolveApiKeys(params);
         
@@ -3123,90 +3193,34 @@ ${logContent}
           throw new Error("At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey");
         }
 
-        // Validate normalized project path exists
-        let stats;
-        try {
-          stats = await fs.stat(normalizedPath);
-        } catch (error: any) {
-          if (error.code === 'ENOENT') {
-            throw new Error(`ENOENT: no such file or directory, stat '${normalizedPath}' (original: '${params.projectPath}')`);
-          }
-          throw new Error(`Failed to access project path: ${error.message}`);
-        }
+        // Use the provided codebase context directly
+        const fullContext = params.codebaseContext;
         
-        if (!stats.isDirectory()) {
-          throw new Error(`Project path is not a directory: ${normalizedPath}`);
+        if (fullContext.length === 0) {
+          throw new Error("Codebase context cannot be empty");
         }
 
         const maxTokensPerGroup = params.maxTokensPerGroup || 900000;
 
-        // Get all files with token information
-        let gitignoreRules: string[] = [];
-        try {
-          const gitignorePath = path.join(normalizedPath, '.gitignore');
-          const gitignoreContent = await fs.readFile(gitignorePath, 'utf-8');
-          gitignoreRules = gitignoreContent
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line && !line.startsWith('#'));
-        } catch (error) {
-          // No .gitignore file, continue
+        // Parse files from codebase context and organize into groups
+        const files = parseCodebaseContext(fullContext);
+        
+        if (files.length === 0) {
+          throw new Error("No files found in codebase context");
         }
 
-        const allIgnorePatterns = [
-          ...gitignoreRules,
-          ...(params.temporaryIgnore || []),
-          'node_modules/**',
-          '.git/**',
-          '*.log',
-          '.env*',
-          'dist/**',
-          'build/**',
-          '*.map',
-          '*.lock',
-          '.cache/**',
-          'coverage/**',
-          'logs/**' // Don't include our own logs
-        ];
-
-        // Scan all files
-        const files = await glob('**/*', {
-          cwd: normalizedPath,
-          ignore: allIgnorePatterns,
-          nodir: true
-        });
-
-        // Calculate tokens for each file
-        const fileTokenInfos: FileTokenInfo[] = [];
-        let totalProjectTokens = 0;
+        // Create file groups based on token limits
+        const fileGroups = createFileGroups(files, maxTokensPerGroup);
         
-        for (const file of files) {
-          const fileInfo = await getFileTokenInfo(normalizedPath, file);
-          if (fileInfo) {
-            fileTokenInfos.push(fileInfo);
-            totalProjectTokens += fileInfo.tokens;
-          }
-        }
-
-        // Create file groups for large projects using AI
-        const groups = await createFileGroupsWithAI(fileTokenInfos, maxTokensPerGroup, apiKeys, "General project analysis");
-        
-        // Serialize groups data for step 2
+        // Generate orchestrator analysis data
+        const analysisMode = params.analysisMode || 'general';
         const groupsData = JSON.stringify({
-          groups: groups.map(g => ({
-            files: g.files.map(f => ({ filePath: f.filePath, tokens: f.tokens })),
-            totalTokens: g.totalTokens,
-            groupIndex: g.groupIndex,
-            name: g.name,
-            description: g.description,
-            reasoning: g.reasoning,
-            customPrompt: g.customPrompt
-          })),
-          totalFiles: fileTokenInfos.length,
-          totalTokens: totalProjectTokens,
-          projectPath: normalizedPath,
-          analysisMode: params.analysisMode,
-          maxTokensPerGroup: maxTokensPerGroup
+          groups: fileGroups,
+          analysisMode,
+          maxTokensPerGroup,
+          projectName: params.projectName,
+          totalFiles: files.length,
+          totalGroups: fileGroups.length
         });
 
         return {
@@ -3215,41 +3229,16 @@ ${logContent}
               type: "text",
               text: `# Project Orchestrator Groups Created Successfully!
 
-## Project: ${params.projectPath}
-*Normalized Path:* ${normalizedPath}
+## Project: ${params.projectName || "Unnamed Project"}
 
-**Total Files:** ${fileTokenInfos.length}  
-**Total Tokens:** ${totalProjectTokens.toLocaleString()}  
-**Analysis Mode:** ${params.analysisMode}  
-**Max Tokens Per Group:** ${maxTokensPerGroup.toLocaleString()}  
+**Analysis Mode:** ${analysisMode}
+**Files Processed:** ${files.length}
+**Groups Created:** ${fileGroups.length}
+**Max Tokens per Group:** ${maxTokensPerGroup.toLocaleString()}
 
 ---
 
-## 📦 **File Groups Created:**
-
-${groups.map((group, index) => `### Group ${index + 1}${group.name ? ` - ${group.name}` : ''}
-- **Files:** ${group.files.length}
-- **Tokens:** ${group.totalTokens.toLocaleString()}
-${group.description ? `- **Description:** ${group.description}` : ''}
-${group.reasoning ? `- **AI Reasoning:** ${group.reasoning}` : ''}
-${group.customPrompt ? `- **🎯 Custom Expert:** ${group.customPrompt.substring(0, 150)}...` : ''}
-
-**Files in this group:**
-${group.files.map(f => `  - ${f.filePath} (${f.tokens} tokens)`).join('\n')}
-
----`).join('\n')}
-
-## 📋 **Next Steps:**
-
-1. **Copy the groups data below** (the entire JSON between the backticks)
-2. **Use the 'project_orchestrator_analyze' tool** with:
-   - Same project path: \`${params.projectPath}\`
-   - Your specific question
-   - Same analysis mode: \`${params.analysisMode}\`
-   - The groups data you just copied
-   - Same temporary ignore patterns (if any)
-
-## 🔧 **Groups Data:**
+## 📦 **File Groups Data:**
 
 \`\`\`json
 ${groupsData}
@@ -3257,7 +3246,20 @@ ${groupsData}
 
 ---
 
-*Groups creation powered by Gemini 2.5 Pro with AI-powered intelligent file grouping*`,
+## 📋 **Next Steps:**
+
+1. **Copy the groups data above** (the entire JSON between the backticks)
+2. **Use the 'project_orchestrator_analyze' tool** with:
+   - Your specific question
+   - The groups data you just copied
+   - Same analysis mode: \`${analysisMode}\`
+   - Same maxTokensPerGroup: \`${maxTokensPerGroup}\`
+
+The orchestrator will analyze each group separately and provide comprehensive insights!
+
+---
+
+*Groups created with Gemini 2.5 Pro orchestration*`,
             },
           ],
           isError: false,
@@ -3297,9 +3299,6 @@ ${groupsData}
       try {
         const params = ProjectOrchestratorAnalyzeSchema.parse(request.params.arguments);
         
-        // Normalize Windows paths to WSL/Linux format  
-        const normalizedPath = normalizeProjectPath(params.projectPath, params.clientWorkingDirectory);
-        
         // Resolve API keys from multiple sources
         const apiKeys = resolveApiKeys(params);
         
@@ -3315,123 +3314,62 @@ ${groupsData}
           throw new Error("Invalid groups data JSON. Please ensure you copied the complete groups data from project_orchestrator_create step.");
         }
 
-        // Validate normalized project path exists
-        let stats;
-        try {
-          stats = await fs.stat(normalizedPath);
-        } catch (error: any) {
-          if (error.code === 'ENOENT') {
-            throw new Error(`ENOENT: no such file or directory, stat '${normalizedPath}' (original: '${params.projectPath}')`);
-          }
-          throw new Error(`Failed to access project path: ${error.message}`);
+        // Validate groups data structure
+        if (!groupsData.groups || !Array.isArray(groupsData.groups)) {
+          throw new Error("Invalid groups data structure. Missing 'groups' array.");
         }
+
+        const analysisMode = params.analysisMode || 'general';
+        const groups = groupsData.groups;
+
+        // Simple orchestrator analysis - analyze each group with Gemini
+        const groupResults: string[] = [];
         
-        if (!stats.isDirectory()) {
-          throw new Error(`Project path is not a directory: ${normalizedPath}`);
-        }
-
-        // Reconstruct file groups with actual file content
-        const groups: FileGroup[] = [];
-        for (const groupData of groupsData.groups) {
-          const files: FileTokenInfo[] = [];
+        for (let i = 0; i < groups.length; i++) {
+          const group = groups[i];
           
-          for (const fileData of groupData.files) {
-            try {
-              const filePath = path.join(normalizedPath, fileData.filePath);
-              const content = await fs.readFile(filePath, 'utf-8');
-              files.push({
-                filePath: fileData.filePath,
-                tokens: fileData.tokens,
-                content: content
-              });
-            } catch (error) {
-              logger.warn('Failed to read file during analysis', { 
-                filePath: fileData.filePath, 
-                error: error instanceof Error ? error.message : 'Unknown error' 
-              });
-            }
+          // Reconstruct group content
+          let groupContent = '';
+          for (const file of group.files) {
+            groupContent += `--- File: ${file.path || file.filePath} ---\n`;
+            groupContent += file.content || '';
+            groupContent += '\n\n';
           }
-          
-          groups.push({
-            files: files,
-            totalTokens: groupData.totalTokens,
-            groupIndex: groupData.groupIndex,
-            name: groupData.name,
-            description: groupData.description,
-            reasoning: groupData.reasoning,
-            customPrompt: groupData.customPrompt
-          });
-        }
 
-        // Analyze each group in parallel with delay
-        const systemPrompt = SYSTEM_PROMPTS[params.analysisMode as keyof typeof SYSTEM_PROMPTS] || SYSTEM_PROMPTS.general;
-        
-        // Create async function for each group analysis
-        const analyzeGroup = async (group: FileGroup, index: number, delayMs: number = 0): Promise<string> => {
-          // Add delay to prevent API rate limiting
-          if (delayMs > 0) {
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-          }
-          
-          try {
-            const groupContext = group.files.map(f => `--- File: ${f.filePath} ---\n${f.content}`).join('\n\n');
-            
-            // Use custom prompt if available, otherwise fallback to system prompt
-            const effectivePrompt = group.customPrompt || systemPrompt;
-            
-            const groupPrompt = `${effectivePrompt}
+          // Analyze this group
+          const groupPrompt = `You are analyzing Group ${i + 1} of ${groups.length} in project: ${params.projectName || 'Unnamed Project'}
 
-**GROUP CONTEXT (${index + 1}/${groups.length}):**
-This is group ${index + 1} of ${groups.length} from a large project analysis. ${group.name ? `Group Name: "${group.name}"` : ''} ${group.description ? `Group Description: ${group.description}` : ''}
+ANALYSIS MODE: ${analysisMode}
+USER QUESTION: ${params.question}
 
-${group.reasoning ? `**AI Grouping Reasoning:** ${group.reasoning}` : ''}
+GROUP CONTENT:
+${groupContent}
 
-Files in this group:
-${group.files.map(f => `- ${f.filePath} (${f.tokens} tokens)`).join('\n')}
+Please provide analysis for this group focusing on the user's question. Be specific and reference file paths when relevant.`;
 
-**PROJECT SUBSET:**
-${groupContext}
-
-**USER QUESTION:**
-${params.question}
-
-Please analyze this subset of the project in the context of the user's question. ${group.name ? `Focus on the "${group.name}" aspect as this group was specifically created for that purpose.` : `Remember this is part ${index + 1} of ${groups.length} total parts.`}`;
-
-            const groupResult = await retryWithApiKeyRotation(
-              (apiKey: string) => new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: "gemini-2.5-pro" }),
-              async (model) => model.generateContent(groupPrompt),
-              apiKeys
-            );
-
-            const groupResponse = await groupResult.response;
-            const groupAnalysis = groupResponse.text();
-            
-            logger.info('Completed group analysis', {
-              groupIndex: index + 1,
-              responseLength: groupAnalysis.length
+          const createModelFn = (apiKey: string) => {
+            const genAI = new GoogleGenerativeAI(apiKey);
+            return genAI.getGenerativeModel({ 
+              model: "gemini-2.5-pro",
+              generationConfig: {
+                maxOutputTokens: 32768,
+                temperature: 0.5,
+                topK: 40,
+                topP: 0.95,
+              }
             });
-            
-            return groupAnalysis;
+          };
 
-          } catch (error) {
-            logger.error('Failed to analyze group', {
-              groupIndex: index + 1,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            });
-            return `**Group ${index + 1} Analysis Failed:** ${error instanceof Error ? error.message : 'Unknown error'}`;
-          }
-        };
+          const result = await retryWithApiKeyRotation(
+            createModelFn,
+            (model) => model.generateContent(groupPrompt),
+            apiKeys
+          ) as any;
+          const response = await result.response;
+          const analysis = response.text();
 
-        // Launch all group analyses in parallel with staggered delays
-        const groupPromises = groups.map((group, index) => 
-          analyzeGroup(group, index, index * 700) // 0.7 second delay between each group
-        );
-
-        // Wait for all analyses to complete
-        const groupResults = await Promise.all(groupPromises);
-
-        // Aggregate all results
-        const finalAnalysis = aggregateAnalysisResults(groupResults, params.question, params.analysisMode);
+          groupResults.push(`## Group ${i + 1} Analysis\n\n${analysis}\n\n---\n`);
+        }
 
         return {
           content: [
@@ -3439,35 +3377,19 @@ Please analyze this subset of the project in the context of the user's question.
               type: "text",
               text: `# Project Orchestrator Analysis Results
 
-## Project: ${params.projectPath}
-*Normalized Path:* ${normalizedPath}
+## Project: ${params.projectName || "Unnamed Project"}
 
 **Question:** ${params.question}
-**Analysis Mode:** ${params.analysisMode}
-
-**Total Files:** ${groupsData.totalFiles}  
-**Total Tokens:** ${groupsData.totalTokens.toLocaleString()}  
-**Analysis Groups:** ${groups.length}  
-**Max Tokens Per Group:** ${(params.maxTokensPerGroup || 900000).toLocaleString()}  
+**Analysis Mode:** ${analysisMode}
+**Groups Analyzed:** ${groups.length}
 
 ---
 
-${finalAnalysis}
-
-## Orchestration Statistics
-**Project Path:** ${normalizedPath}  
-**Total Files Analyzed:** ${groupsData.totalFiles}  
-**Total Project Tokens:** ${groupsData.totalTokens.toLocaleString()}  
-**Analysis Groups Created:** ${groups.length}  
-**Max Tokens Per Group:** ${(params.maxTokensPerGroup || 900000).toLocaleString()}  
-**API Keys Used:** ${apiKeys.length}  
-
-### Group Breakdown
-${groups.map((group, index) => `- **Group ${index + 1}${group.name ? ` (${group.name})` : ''}**: ${group.files.length} files, ${group.totalTokens.toLocaleString()} tokens${group.description ? ` - ${group.description}` : ''}`).join('\n')}
+${groupResults.join('\n')}
 
 ---
 
-*Analysis powered by Project Orchestrator with Gemini 2.5 Pro*`,
+*Analysis powered by Gemini 2.5 Pro orchestration*`,
             },
           ],
           isError: false,

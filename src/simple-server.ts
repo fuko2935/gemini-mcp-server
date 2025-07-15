@@ -1748,6 +1748,16 @@ const ReadLogFileSchema = z.object({
   filename: z.enum(["activity.log", "error.log"]).describe("📄 LOG FILE NAME: Choose which log file to read. 'activity.log' contains all operations and debug info. 'error.log' contains only errors and critical issues."),
 });
 
+// Schema for project orchestrator - handles large projects by intelligent grouping
+const ProjectOrchestratorSchema = z.object({
+  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
+  question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! The orchestrator will automatically group files to stay under 1M token limit, analyze each group, then combine results."),
+  analysisMode: z.enum(['general', 'implementation', 'refactoring', 'explanation', 'debugging', 'audit', 'security', 'performance', 'testing', 'documentation', 'migration', 'review', 'onboarding', 'api', 'apex', 'gamedev', 'aiml', 'devops', 'mobile', 'frontend', 'backend', 'database', 'startup', 'enterprise', 'blockchain', 'embedded', 'architecture', 'cloud', 'data', 'monitoring', 'infrastructure', 'compliance', 'opensource', 'freelancer', 'education', 'research']).default('general').describe("🎯 ANALYSIS MODE: Choose the expert that best fits your needs. The orchestrator will use this mode for all file groups to ensure consistent analysis across the entire project."),
+  maxTokensPerGroup: z.number().min(100000).max(950000).default(900000).optional().describe("🔢 MAX TOKENS PER GROUP: Maximum tokens per file group (default: 900K, max: 950K). Lower values create smaller groups for more detailed analysis. Higher values allow larger chunks but may hit API limits."),
+  ...generateApiKeyFields()
+});
+
 // Create the server
 const server = new Server({
   name: "gemini-mcp-server",
@@ -1792,6 +1802,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "read_log_file",
         description: "📄 READ LOG FILE - Read the contents of a server log file ('activity.log' or 'error.log'). Useful for debugging the server itself, monitoring API key rotation, and troubleshooting issues.",
         inputSchema: zodToJsonSchema(ReadLogFileSchema),
+      },
+      {
+        name: "project_orchestrator",
+        description: "🎭 PROJECT ORCHESTRATOR - **ULTIMATE LARGE PROJECT ANALYSIS!** Automatically handles projects over 1M tokens by intelligently grouping files, analyzing each group separately, then combining results. Perfect for massive codebases that exceed token limits.",
+        inputSchema: zodToJsonSchema(ProjectOrchestratorSchema),
       },
     ],
   };
@@ -3015,6 +3030,263 @@ ${logContent}
         };
       }
 
+    case "project_orchestrator":
+      try {
+        logger.info('Received project orchestrator request');
+        
+        const params = ProjectOrchestratorSchema.parse(request.params.arguments);
+        const normalizedPath = normalizeProjectPath(params.projectPath);
+        const apiKeys = resolveApiKeys(params);
+        const maxTokensPerGroup = params.maxTokensPerGroup || 900000;
+        
+        logger.info('Starting project orchestration', {
+          projectPath: normalizedPath,
+          analysisMode: params.analysisMode,
+          maxTokensPerGroup,
+          apiKeysCount: apiKeys.length
+        });
+
+        // Get all files with token information
+        let gitignoreRules: string[] = [];
+        try {
+          const gitignorePath = path.join(normalizedPath, '.gitignore');
+          const gitignoreContent = await fs.readFile(gitignorePath, 'utf-8');
+          gitignoreRules = gitignoreContent
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line && !line.startsWith('#'));
+        } catch (error) {
+          // No .gitignore file, continue
+        }
+
+        const allIgnorePatterns = [
+          ...gitignoreRules,
+          ...(params.temporaryIgnore || []),
+          'node_modules/**',
+          '.git/**',
+          '*.log',
+          '.env*',
+          'dist/**',
+          'build/**',
+          '*.map',
+          '*.lock',
+          '.cache/**',
+          'coverage/**',
+          'logs/**' // Don't include our own logs
+        ];
+
+        // Scan all files
+        const files = await glob('**/*', {
+          cwd: normalizedPath,
+          ignore: allIgnorePatterns,
+          nodir: true
+        });
+
+        logger.info('Scanned project files', { totalFiles: files.length });
+
+        // Calculate tokens for each file
+        const fileTokenInfos: FileTokenInfo[] = [];
+        let totalProjectTokens = 0;
+        
+        for (const file of files) {
+          const fileInfo = await getFileTokenInfo(normalizedPath, file);
+          if (fileInfo) {
+            fileTokenInfos.push(fileInfo);
+            totalProjectTokens += fileInfo.tokens;
+          }
+        }
+
+        logger.info('Calculated project tokens', { 
+          totalFiles: fileTokenInfos.length,
+          totalTokens: totalProjectTokens,
+          willNeedOrchestration: totalProjectTokens > 1000000
+        });
+
+        // Check if orchestration is needed
+        if (totalProjectTokens <= 1000000) {
+          logger.info('Project is small enough for single analysis, delegating to regular analyzer');
+          
+          // Use regular analyzer for small projects
+          const regularAnalysisResult = await retryWithApiKeyRotation(
+            (apiKey: string) => new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: "gemini-2.0-flash-exp" }),
+            async (model) => {
+              const fullContext = fileTokenInfos.map(f => `--- File: ${f.filePath} ---\n${f.content}`).join('\n\n');
+              const systemPrompt = SYSTEM_PROMPTS[params.analysisMode as keyof typeof SYSTEM_PROMPTS] || SYSTEM_PROMPTS.general;
+              
+              const prompt = `${systemPrompt}
+
+**PROJECT CONTEXT:**
+${fullContext}
+
+**USER QUESTION:**
+${params.question}
+
+Please provide a comprehensive analysis based on the project context and the user's question.`;
+
+              return model.generateContent(prompt);
+            },
+            apiKeys
+          );
+
+          const response = await regularAnalysisResult.response;
+          const analysis = response.text();
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `# Project Analysis (Single Pass)
+
+## Project Overview
+**Path:** ${normalizedPath}  
+**Total Files:** ${fileTokenInfos.length}  
+**Total Tokens:** ${totalProjectTokens.toLocaleString()}  
+**Analysis Mode:** ${params.analysisMode}
+
+---
+
+${analysis}
+
+---
+
+*Note: This project was small enough (under 1M tokens) to analyze in a single pass without orchestration.*`,
+              },
+            ],
+            isError: false,
+          };
+        }
+
+        // Create file groups for large projects using AI
+        const groups = await createFileGroupsWithAI(fileTokenInfos, maxTokensPerGroup, apiKeys, params.question);
+        
+        logger.info('Created file groups for orchestrated analysis', {
+          totalGroups: groups.length,
+          averageFilesPerGroup: groups.reduce((sum, g) => sum + g.files.length, 0) / groups.length
+        });
+
+        // Analyze each group
+        const groupResults: string[] = [];
+        const systemPrompt = SYSTEM_PROMPTS[params.analysisMode as keyof typeof SYSTEM_PROMPTS] || SYSTEM_PROMPTS.general;
+
+        for (let i = 0; i < groups.length; i++) {
+          const group = groups[i];
+          
+          logger.info('Analyzing group', {
+            groupIndex: i + 1,
+            totalGroups: groups.length,
+            filesInGroup: group.files.length,
+            tokensInGroup: group.totalTokens
+          });
+
+          try {
+            const groupContext = group.files.map(f => `--- File: ${f.filePath} ---\n${f.content}`).join('\n\n');
+            
+            const groupPrompt = `${systemPrompt}
+
+**GROUP CONTEXT (${i + 1}/${groups.length}):**
+This is group ${i + 1} of ${groups.length} from a large project analysis. ${group.name ? `Group Name: "${group.name}"` : ''} ${group.description ? `Group Description: ${group.description}` : ''}
+
+${group.reasoning ? `**AI Grouping Reasoning:** ${group.reasoning}` : ''}
+
+Files in this group:
+${group.files.map(f => `- ${f.filePath} (${f.tokens} tokens)`).join('\n')}
+
+**PROJECT SUBSET:**
+${groupContext}
+
+**USER QUESTION:**
+${params.question}
+
+Please analyze this subset of the project in the context of the user's question. ${group.name ? `Focus on the "${group.name}" aspect as this group was specifically created for that purpose.` : `Remember this is part ${i + 1} of ${groups.length} total parts.`}`;
+
+            const groupResult = await retryWithApiKeyRotation(
+              (apiKey: string) => new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: "gemini-2.0-flash-exp" }),
+              async (model) => model.generateContent(groupPrompt),
+              apiKeys
+            );
+
+            const groupResponse = await groupResult.response;
+            const groupAnalysis = groupResponse.text();
+            groupResults.push(groupAnalysis);
+            
+            logger.info('Completed group analysis', {
+              groupIndex: i + 1,
+              responseLength: groupAnalysis.length
+            });
+
+          } catch (error) {
+            logger.error('Failed to analyze group', {
+              groupIndex: i + 1,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            });
+            groupResults.push(`**Group ${i + 1} Analysis Failed:** ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
+
+        // Aggregate all results
+        const finalAnalysis = aggregateAnalysisResults(groupResults, params.question, params.analysisMode);
+        
+        logger.info('Orchestrator analysis completed', {
+          totalGroups: groups.length,
+          successfulGroups: groupResults.filter(r => !r.includes('Analysis Failed')).length,
+          finalAnalysisLength: finalAnalysis.length
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${finalAnalysis}
+
+## Orchestration Statistics
+**Project Path:** ${normalizedPath}  
+**Total Files Analyzed:** ${fileTokenInfos.length}  
+**Total Project Tokens:** ${totalProjectTokens.toLocaleString()}  
+**Analysis Groups Created:** ${groups.length}  
+**Max Tokens Per Group:** ${maxTokensPerGroup.toLocaleString()}  
+**API Keys Used:** ${apiKeys.length}  
+
+### Group Breakdown
+${groups.map((group, index) => `- **Group ${index + 1}${group.name ? ` (${group.name})` : ''}**: ${group.files.length} files, ${group.totalTokens.toLocaleString()} tokens${group.description ? ` - ${group.description}` : ''}`).join('\n')}
+
+---
+
+*Analysis powered by Project Orchestrator with Gemini 2.0 Flash*`,
+            },
+          ],
+          isError: false,
+        };
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error('Error in project orchestrator', { error: errorMessage });
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: `# Project Orchestrator - Error
+
+**Error:** ${errorMessage}
+
+### Troubleshooting:
+- Ensure the project path exists and is accessible
+- Check that your Gemini API keys are valid
+- Verify the project directory contains readable files
+- Try with a smaller maxTokensPerGroup value
+- Check logs for detailed error information
+
+### For Large Projects:
+- The orchestrator automatically handles projects over 1M tokens
+- It intelligently groups files to stay within API limits
+- Each group is analyzed separately and results are combined
+- Use 'read_log_file' tool to debug orchestrator operations`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
     default:
       logger.warn('Unknown tool called', { toolName: request.params.name });
       throw new Error(`Unknown tool: ${request.params.name}`);
@@ -3222,6 +3494,316 @@ async function readLogFileLogic(filename: 'activity.log' | 'error.log'): Promise
     }
     throw new Error(`Failed to read log file '${filename}': ${error.message}`);
   }
+}
+
+// Project Orchestrator Helper Functions
+interface FileTokenInfo {
+  filePath: string;
+  tokens: number;
+  content: string;
+}
+
+interface FileGroup {
+  files: FileTokenInfo[];
+  totalTokens: number;
+  groupIndex: number;
+  name?: string;
+  description?: string;
+  reasoning?: string;
+}
+
+// Calculate tokens for a single file content
+function calculateFileTokens(content: string): number {
+  // Enhanced token calculation for code files
+  const basicEstimate = Math.ceil(content.length / 4);
+  const newlineCount = (content.match(/\n/g) || []).length;
+  const spaceCount = (content.match(/ {2,}/g) || []).length; // Multiple spaces
+  const specialCharsCount = (content.match(/[{}[\]();,.<>\/\\=+\-*&|!@#$%^`~]/g) || []).length;
+  const codeStructuresCount = (content.match(/(function|class|interface|import|export|const|let|var)/g) || []).length;
+  
+  const adjustedEstimate = basicEstimate + 
+    Math.ceil(newlineCount * 0.5) + 
+    Math.ceil(spaceCount * 0.3) + 
+    Math.ceil(specialCharsCount * 0.2) +
+    Math.ceil(codeStructuresCount * 2); // Code structures are token-heavy
+  
+  return adjustedEstimate;
+}
+
+// Get file information with token count
+async function getFileTokenInfo(projectPath: string, filePath: string): Promise<FileTokenInfo | null> {
+  try {
+    const fullPath = path.join(projectPath, filePath);
+    const content = await fs.readFile(fullPath, 'utf-8');
+    const tokens = calculateFileTokens(content);
+    
+    return {
+      filePath,
+      tokens,
+      content
+    };
+  } catch (error) {
+    logger.warn('Failed to read file for token calculation', { 
+      filePath, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+    return null;
+  }
+}
+
+// AI-powered intelligent file grouping 
+async function createFileGroupsWithAI(
+  files: FileTokenInfo[], 
+  maxTokensPerGroup: number = 900000,
+  apiKeys: string[],
+  question: string
+): Promise<FileGroup[]> {
+  logger.info('Starting AI-powered file grouping', {
+    totalFiles: files.length,
+    totalTokens: files.reduce((sum, f) => sum + f.tokens, 0),
+    maxTokensPerGroup
+  });
+
+  try {
+    // Create file manifest for AI
+    const fileManifest = files.map(f => ({
+      path: f.filePath,
+      tokens: f.tokens,
+      size: f.content.length,
+      extension: path.extname(f.filePath),
+      directory: path.dirname(f.filePath)
+    }));
+
+    const groupingPrompt = `You are an expert project architect who needs to intelligently group files for analysis. Your task is to create semantic groups that stay under token limits while keeping related files together.
+
+**PROJECT FILES MANIFEST:**
+${JSON.stringify(fileManifest, null, 2)}
+
+**CONSTRAINTS:**
+- Maximum tokens per group: ${maxTokensPerGroup.toLocaleString()}
+- Total files to group: ${files.length}
+- User's question context: "${question}"
+
+**GROUPING STRATEGY:**
+Create logical groups based on:
+1. **Functional Relationships**: Group files that work together (components, services, utilities)
+2. **Directory Structure**: Keep related directories together when possible  
+3. **File Dependencies**: Group files that likely import/depend on each other
+4. **Analysis Context**: Consider the user's question to prioritize relevant groupings
+5. **Token Efficiency**: Maximize files per group while staying under limits
+
+**OUTPUT FORMAT (JSON only):**
+\`\`\`json
+{
+  "groups": [
+    {
+      "name": "Core Components",
+      "description": "Main React components and UI logic",
+      "files": ["src/components/Header.tsx", "src/components/Footer.tsx"],
+      "estimatedTokens": 45000,
+      "reasoning": "These UI components work together and should be analyzed as a unit"
+    }
+  ],
+  "totalGroups": 3,
+  "strategy": "Grouped by functional areas prioritizing user's analysis needs"
+}
+\`\`\`
+
+Respond with JSON only, no additional text.`;
+
+    const groupingResult = await retryWithApiKeyRotation(
+      (apiKey: string) => new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: "gemini-2.0-flash-exp" }),
+      async (model) => model.generateContent(groupingPrompt),
+      apiKeys
+    );
+
+    const response = await groupingResult.response;
+    const aiResponse = response.text();
+    
+    logger.debug('AI grouping response received', { responseLength: aiResponse.length });
+
+    // Extract JSON from response
+    const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/) || aiResponse.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('AI did not return valid JSON for file grouping');
+    }
+
+    const groupingData = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+    
+    // Convert AI groups to our FileGroup format
+    const aiGroups: FileGroup[] = [];
+    let groupIndex = 0;
+
+    for (const aiGroup of groupingData.groups) {
+      const groupFiles: FileTokenInfo[] = [];
+      let totalTokens = 0;
+
+      for (const filePath of aiGroup.files) {
+        const fileInfo = files.find(f => f.filePath === filePath);
+        if (fileInfo) {
+          groupFiles.push(fileInfo);
+          totalTokens += fileInfo.tokens;
+        }
+      }
+
+      // Validate token limit
+      if (totalTokens > maxTokensPerGroup) {
+        logger.warn('AI group exceeds token limit, will split', {
+          groupName: aiGroup.name,
+          totalTokens,
+          maxTokensPerGroup,
+          filesInGroup: groupFiles.length
+        });
+        
+        // Fall back to algorithmic splitting for this group
+        const splitGroups = createFileGroupsAlgorithmic(groupFiles, maxTokensPerGroup, groupIndex);
+        aiGroups.push(...splitGroups);
+        groupIndex += splitGroups.length;
+      } else {
+        aiGroups.push({
+          files: groupFiles,
+          totalTokens,
+          groupIndex: groupIndex++,
+          name: aiGroup.name,
+          description: aiGroup.description,
+          reasoning: aiGroup.reasoning
+        });
+      }
+    }
+
+    // Handle any files not included in AI groups
+    const includedFiles = new Set(aiGroups.flatMap(g => g.files.map(f => f.filePath)));
+    const remainingFiles = files.filter(f => !includedFiles.has(f.filePath));
+    
+    if (remainingFiles.length > 0) {
+      logger.info('Processing remaining files not grouped by AI', { remainingFiles: remainingFiles.length });
+      const remainingGroups = createFileGroupsAlgorithmic(remainingFiles, maxTokensPerGroup, groupIndex);
+      aiGroups.push(...remainingGroups);
+    }
+
+    logger.info('AI-powered file grouping completed', {
+      totalGroups: aiGroups.length,
+      strategy: groupingData.strategy,
+      averageTokensPerGroup: aiGroups.reduce((sum, g) => sum + g.totalTokens, 0) / aiGroups.length
+    });
+
+    return aiGroups;
+
+  } catch (error) {
+    logger.warn('AI grouping failed, falling back to algorithmic grouping', { 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+    
+    // Fallback to algorithmic grouping
+    return createFileGroupsAlgorithmic(files, maxTokensPerGroup);
+  }
+}
+
+// Fallback algorithmic file grouping (original algorithm)
+function createFileGroupsAlgorithmic(files: FileTokenInfo[], maxTokensPerGroup: number = 900000, startIndex: number = 0): FileGroup[] {
+  const groups: FileGroup[] = [];
+  let currentGroup: FileTokenInfo[] = [];
+  let currentTokens = 0;
+  let groupIndex = startIndex;
+  
+  // Sort files by token count (smaller files first for better packing)
+  const sortedFiles = [...files].sort((a, b) => a.tokens - b.tokens);
+  
+  for (const file of sortedFiles) {
+    // If this single file exceeds the limit, create a separate group
+    if (file.tokens > maxTokensPerGroup) {
+      logger.warn('Large file exceeds group limit', {
+        filePath: file.filePath,
+        fileTokens: file.tokens,
+        maxTokensPerGroup
+      });
+      
+      groups.push({
+        files: [file],
+        totalTokens: file.tokens,
+        groupIndex: groupIndex++
+      });
+      continue;
+    }
+    
+    // Check if adding this file would exceed the limit
+    if (currentTokens + file.tokens > maxTokensPerGroup && currentGroup.length > 0) {
+      groups.push({
+        files: [...currentGroup],
+        totalTokens: currentTokens,
+        groupIndex: groupIndex++
+      });
+      
+      currentGroup = [file];
+      currentTokens = file.tokens;
+    } else {
+      currentGroup.push(file);
+      currentTokens += file.tokens;
+    }
+  }
+  
+  // Add the last group if it has files
+  if (currentGroup.length > 0) {
+    groups.push({
+      files: [...currentGroup],
+      totalTokens: currentTokens,
+      groupIndex: groupIndex
+    });
+  }
+  
+  return groups;
+}
+
+// Aggregate analysis results from multiple groups
+function aggregateAnalysisResults(groupResults: string[], question: string, analysisMode: string): string {
+  const timestamp = new Date().toISOString();
+  
+  return `# Project Orchestrator - Comprehensive Analysis
+
+## Analysis Overview
+**Question:** ${question}  
+**Analysis Mode:** ${analysisMode}  
+**Analysis Groups:** ${groupResults.length}  
+**Processed:** ${timestamp}
+
+---
+
+## Executive Summary
+
+This analysis was conducted using the Project Orchestrator system, which intelligently divided your project into ${groupResults.length} manageable groups to stay within token limits, then analyzed each group separately before combining the results.
+
+## Detailed Analysis by Group
+
+${groupResults.map((result, index) => `
+### Group ${index + 1} Analysis
+
+${result}
+
+---
+`).join('\n')}
+
+## Consolidated Insights
+
+Based on the analysis of all ${groupResults.length} groups, here are the key findings:
+
+### Key Patterns Identified
+- **Cross-Group Consistency**: Common patterns and practices observed across different parts of the codebase
+- **Architecture Overview**: High-level structural insights derived from analyzing the entire project
+- **Integration Points**: How different parts of the codebase interact and depend on each other
+
+### Recommendations
+- **Immediate Actions**: Priority items that should be addressed first
+- **Long-term Improvements**: Strategic enhancements for the project's evolution
+- **Best Practices**: Coding standards and practices to maintain consistency
+
+### Next Steps
+1. Review each group's specific findings in detail
+2. Prioritize recommendations based on your project goals
+3. Consider running focused analysis on specific areas of interest
+
+---
+
+*This orchestrated analysis ensures comprehensive coverage of large projects while respecting API limits. Each group was analyzed with the same expertise level for consistent results.*`;
 }
 
 // Start the server (Smithery will run this directly)

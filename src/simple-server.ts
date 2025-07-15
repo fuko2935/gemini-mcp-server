@@ -1459,14 +1459,18 @@ async function retryWithApiKeyRotation<T>(
         errorCode: error.code || 'unknown'
       });
       
-      // Check if it's a rate limit or invalid key error
+      // Check if it's a rate limit, quota, overload or invalid key error
       const isRotatableError = error.message && (
         error.message.includes('429') || 
         error.message.includes('Too Many Requests') || 
         error.message.includes('quota') || 
         error.message.includes('rate limit') ||
         error.message.includes('exceeded your current quota') ||
-        error.message.includes('API key not valid')
+        error.message.includes('API key not valid') ||
+        error.message.includes('503') ||
+        error.message.includes('Service Unavailable') ||
+        error.message.includes('overloaded') ||
+        error.message.includes('Please try again later')
       );
       
       if (isRotatableError) {
@@ -1474,7 +1478,9 @@ async function retryWithApiKeyRotation<T>(
         const previousKeyIndex = currentKeyIndex + 1;
         currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
         const remainingTime = Math.ceil((maxDurationMs - (Date.now() - startTime)) / 1000);
-        const errorType = error.message.includes('API key not valid') ? 'Invalid API key' : 'Rate limit hit';
+        const errorType = error.message.includes('API key not valid') ? 'Invalid API key' : 
+                         error.message.includes('503') || error.message.includes('overloaded') ? 'Service overloaded' : 
+                         'Rate limit hit';
         
         logger.warn(`API Key Rotation Triggered: ${errorType}`, {
           attempt: attemptCount,

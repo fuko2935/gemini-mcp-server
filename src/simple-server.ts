@@ -72,6 +72,8 @@ const ALLOWED_PATH_PATTERNS = [
   /^\/home\/[^\/]+\/(?:Projects|Development|Dev|Code|Workspace)\/.*/i, // Allow subdirectories
   /^\.{1,2}$/,  // Allow current and parent directory
   /^\.\//, // Allow relative paths from current directory
+  /^\/app$/i, // Allow app directory for testing
+  /^\/app\/.*/i, // Allow app subdirectories for testing
 ];
 
 // System prompts for different analysis modes

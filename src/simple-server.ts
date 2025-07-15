@@ -1322,6 +1322,9 @@ function normalizeProjectPath(projectPath: string, clientWorkingDirectory?: stri
     normalizedPath = actualClientWorkingDirectory;
   } else if (actualClientWorkingDirectory && !path.isAbsolute(projectPath)) {
     normalizedPath = path.resolve(actualClientWorkingDirectory, projectPath);
+  } else if (projectPath === '.') {
+    // If no client working directory available, reject relative paths
+    throw new Error("Relative path '.' requires clientWorkingDirectory parameter. Please provide the full path to your project directory instead.");
   }
   
   // Convert Windows paths to WSL/Unix format
@@ -1664,7 +1667,7 @@ const ApiKeyStatusSchema = z.object({
 
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'. 💡 NEW USER? Use 'get_usage_guide' tool first to learn all capabilities!"),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
   clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
@@ -1723,7 +1726,7 @@ const GeminiCodebaseAnalyzerSchema = z.object({
 
 // Gemini Code Search Schema - for targeted, fast searches
 const GeminiCodeSearchSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
   clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
   searchQuery: z.string().min(1).max(500).describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. 🌍 TIP: Use English for best AI performance! 💡 NEW USER? Use 'get_usage_guide' with 'search-tips' topic first! Examples:
@@ -1757,7 +1760,7 @@ const UsageGuideSchema = z.object({
 
 // Dynamic Expert Mode Step 1: Create Custom Expert Schema
 const DynamicExpertCreateSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
   clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
   expertiseHint: z.string().min(1).max(200).optional().describe("🎯 EXPERTISE HINT (optional): Suggest what kind of expert you need. Examples: 'React performance expert', 'Database architect', 'Security auditor', 'DevOps specialist'. Leave empty for automatic expert selection based on your project."),
@@ -1766,7 +1769,7 @@ const DynamicExpertCreateSchema = z.object({
 
 // Dynamic Expert Mode Step 2: Analyze with Custom Expert Schema
 const DynamicExpertAnalyzeSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
   clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! This will be analyzed using the custom expert mode created in step 1."),
@@ -1781,7 +1784,7 @@ const ReadLogFileSchema = z.object({
 
 // Project Orchestrator Step 1: Create Groups and Analysis Plan Schema
 const ProjectOrchestratorCreateSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
   clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
   analysisMode: z.enum(['general', 'implementation', 'refactoring', 'explanation', 'debugging', 'audit', 'security', 'performance', 'testing', 'documentation', 'migration', 'review', 'onboarding', 'api', 'apex', 'gamedev', 'aiml', 'devops', 'mobile', 'frontend', 'backend', 'database', 'startup', 'enterprise', 'blockchain', 'embedded', 'architecture', 'cloud', 'data', 'monitoring', 'infrastructure', 'compliance', 'opensource', 'freelancer', 'education', 'research']).default('general').describe("🎯 ANALYSIS MODE: Choose the expert that best fits your needs. The orchestrator will use this mode for all file groups to ensure consistent analysis across the entire project."),
@@ -1791,7 +1794,7 @@ const ProjectOrchestratorCreateSchema = z.object({
 
 // Project Orchestrator Step 2: Analyze with Groups Schema
 const ProjectOrchestratorAnalyzeSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
+  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
   clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! This will be analyzed using the file groups created in step 1."),

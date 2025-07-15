@@ -1669,10 +1669,9 @@ const ApiKeyStatusSchema = z.object({
 
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
+  codebaseContext: z.string().min(1).describe("📁 CODEBASE CONTENT: The full content of your project files concatenated together. This should include all relevant source files with their file paths as separators. Format: '--- File: path/to/file ---\\n<file content>\\n\\n'. This content will be analyzed by Gemini AI."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'. 💡 NEW USER? Use 'get_usage_guide' tool first to learn all capabilities!"),
-  temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
-  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
+  projectName: z.string().optional().describe("📋 PROJECT NAME: Optional name for your project to provide better context in the analysis results."),
   analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded", "architecture", "cloud", "data", "monitoring", "infrastructure", "compliance", "opensource", "freelancer", "education", "research"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):
 
 📋 GENERAL MODES:
@@ -1728,9 +1727,8 @@ const GeminiCodebaseAnalyzerSchema = z.object({
 
 // Gemini Code Search Schema - for targeted, fast searches
 const GeminiCodeSearchSchema = z.object({
-  projectPath: z.string().min(1).describe("📁 PROJECT PATH: Full path to your project directory. Examples: '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp', '/mnt/c/Projects/MyApp'. Use absolute paths for reliable results. Only workspace/project directories allowed for security."),
-  temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
-  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. For '.' paths, provide your current working directory (e.g., 'C:\\\\Projects\\\\MyProject' or '/home/user/project')."),
+  codebaseContext: z.string().min(1).describe("📁 CODEBASE CONTENT: The full content of your project files concatenated together. This should include all relevant source files with their file paths as separators. Format: '--- File: path/to/file ---\\n<file content>\\n\\n'. This content will be searched by Gemini AI."),
+  projectName: z.string().optional().describe("📋 PROJECT NAME: Optional name for your project to provide better context in the search results."),
   searchQuery: z.string().min(1).max(500).describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. 🌍 TIP: Use English for best AI performance! 💡 NEW USER? Use 'get_usage_guide' with 'search-tips' topic first! Examples:
 • 'authentication logic' - Find login/auth code
 • 'error handling' - Find try-catch blocks
@@ -2771,9 +2769,6 @@ ${analysis}
       try {
         const params = GeminiCodebaseAnalyzerSchema.parse(request.params.arguments);
         
-        // Normalize Windows paths to WSL/Linux format  
-        const normalizedPath = normalizeProjectPath(params.projectPath, params.clientWorkingDirectory);
-        
         // Resolve API keys from multiple sources
         const apiKeys = resolveApiKeys(params);
         
@@ -2781,26 +2776,11 @@ ${analysis}
           throw new Error("At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey");
         }
 
-        // Validate normalized project path exists (with better error handling)
-        let stats;
-        try {
-          stats = await fs.stat(normalizedPath);
-        } catch (error: any) {
-          if (error.code === 'ENOENT') {
-            throw new Error(`ENOENT: no such file or directory, stat '${normalizedPath}' (original: '${params.projectPath}')`);
-          }
-          throw new Error(`Failed to access project path: ${error.message}`);
-        }
-        
-        if (!stats.isDirectory()) {
-          throw new Error(`Project path is not a directory: ${normalizedPath}`);
-        }
-
-        // Prepare project context using normalized path and temporary ignore patterns
-        const fullContext = await prepareFullContext(normalizedPath, params.temporaryIgnore);
+        // Use the provided codebase context directly (no file system access needed)
+        const fullContext = params.codebaseContext;
         
         if (fullContext.length === 0) {
-          throw new Error("No readable files found in the project directory");
+          throw new Error("Codebase context cannot be empty");
         }
 
         // Select appropriate system prompt based on analysis mode
@@ -2849,8 +2829,7 @@ ${params.question}`;
               type: "text",
               text: `# Gemini Codebase Analysis Results
 
-## Project: ${params.projectPath}
-*Normalized Path:* ${normalizedPath}
+## Project: ${params.projectName || "Unnamed Project"}
 
 **Question:** ${params.question}
 **Analysis Mode:** ${analysisMode}
@@ -2937,9 +2916,6 @@ ${troubleshootingTips.join('\n')}
       try {
         const params = GeminiCodeSearchSchema.parse(request.params.arguments);
         
-        // Normalize Windows paths to WSL/Linux format  
-        const normalizedPath = normalizeProjectPath(params.projectPath, params.clientWorkingDirectory);
-        
         // Resolve API keys from multiple sources
         const apiKeys = resolveApiKeys(params);
         
@@ -2947,100 +2923,43 @@ ${troubleshootingTips.join('\n')}
           throw new Error("At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey");
         }
 
-        // Validate normalized project path exists
-        let stats;
-        try {
-          stats = await fs.stat(normalizedPath);
-        } catch (error: any) {
-          if (error.code === 'ENOENT') {
-            throw new Error(`ENOENT: no such file or directory, stat '${normalizedPath}' (original: '${params.projectPath}')`);
-          }
-          throw new Error(`Failed to access project path: ${error.message}`);
-        }
+        // Use the provided codebase context directly
+        const fullContext = params.codebaseContext;
         
-        if (!stats.isDirectory()) {
-          throw new Error(`Project path is not a directory: ${normalizedPath}`);
+        if (fullContext.length === 0) {
+          throw new Error("Codebase context cannot be empty");
         }
 
-        // Find relevant code snippets
+        // Use Gemini AI to search through the codebase content
         const maxResults = params.maxResults || 5;
-        const searchResult = await findRelevantCodeSnippets(
-          normalizedPath, 
-          params.searchQuery, 
-          params.fileTypes, 
-          maxResults,
-          params.temporaryIgnore
-        );
         
-        if (searchResult.snippets.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `# Gemini Code Search Results
-
-## Search Query: "${params.searchQuery}"
-**Project:** ${params.projectPath}
-**Files Scanned:** ${searchResult.totalFiles}
-**Results Found:** 0
-
-### No Matching Code Found
-
-The search didn't find any relevant code snippets matching your query. Try:
-
-- Using different keywords or terms
-- Checking if the feature exists in this codebase
-- Using broader search terms
-- Trying the comprehensive analyzer instead
-
-*Search powered by Gemini 2.5 Pro*`,
-              },
-            ],
-          };
-        }
-
-        // Prepare context from relevant snippets
-        let searchContext = '';
-        for (const snippet of searchResult.snippets) {
-          searchContext += `--- File: ${snippet.file} (${snippet.relevance}) ---\n`;
-          searchContext += snippet.content;
-          searchContext += '\n\n';
-        }
-
-        const searchPrompt = `You are a senior AI Software Engineer analyzing specific code snippets from a project. Your task is to help another coding AI understand the most relevant parts of the codebase related to their search query.
+        // Create search prompt for Gemini AI
+        const searchPrompt = `You are an expert code search assistant. Analyze the following codebase and find the most relevant code snippets that match the search query.
 
 SEARCH QUERY: "${params.searchQuery}"
+${params.fileTypes ? `PREFERRED FILE TYPES: ${params.fileTypes.join(', ')}` : ''}
+MAX RESULTS: ${maxResults}
 
-RELEVANT CODE SNIPPETS:
-${searchContext}
+CODEBASE CONTENT:
+${fullContext}
 
-YOUR TASK:
-1. Analyze the provided code snippets that are most relevant to the search query
-2. Explain what you found and how it relates to the search query  
-3. Provide specific code examples and explanations
-4. If multiple relevant patterns are found, organize your response clearly
-5. Focus on practical, actionable insights about the found code
+Please find and extract the most relevant code snippets that match the search query. For each match, provide:
+1. File path
+2. Relevant code snippet
+3. Brief explanation of why it matches
 
-RESPONSE FORMAT:
-- Use clear Markdown formatting
-- Include specific code snippets with explanations
-- Provide file paths and line references when relevant
-- Be concise but comprehensive
-- Focus on answering the search query specifically`;
+Format your response as a structured analysis with clear sections for each match.`;
 
-        // Validate token limit before sending to Gemini 2.5 Pro
-        validateTokenLimit(searchContext, '', params.searchQuery);
-
-        // Send to Gemini AI with API key rotation for rate limits
+        // Send search query to Gemini AI
         const createModelFn = (apiKey: string) => {
           const genAI = new GoogleGenerativeAI(apiKey);
           return genAI.getGenerativeModel({ 
             model: "gemini-2.5-pro",
             generationConfig: {
-              maxOutputTokens: 65536,
-              temperature: 0.5,
-              topK: 40,
-              topP: 0.95,
+              maxOutputTokens: 32768,
+              temperature: 0.3,
+              topK: 20,
+              topP: 0.9,
             }
           });
         };
@@ -3051,8 +2970,10 @@ RESPONSE FORMAT:
           apiKeys
         ) as any;
         const response = await result.response;
-        const analysis = response.text();
+        const searchResults = response.text();
 
+        const filesScanned = fullContext.split('--- File:').length - 1;
+        
         return {
           content: [
             {
@@ -3060,26 +2981,23 @@ RESPONSE FORMAT:
               text: `# Gemini Code Search Results
 
 ## Search Query: "${params.searchQuery}"
-**Project:** ${params.projectPath}
-*Normalized Path:* ${normalizedPath}
-
-**Files Scanned:** ${searchResult.totalFiles}  
-**Relevant Files Found:** ${searchResult.snippets.length}
+**Project:** ${params.projectName || "Unnamed Project"}
+**Files Scanned:** ${filesScanned}
 **Analysis Mode:** Targeted Search (fast)
 
 ---
 
 ## Analysis
 
-${analysis}
+${searchResults}
 
 ---
 
 ### Search Summary
 - **Query:** ${params.searchQuery}
-- **File Types:** ${params.fileTypes?.join(', ') || 'All files'}
+- **File Types:** ${params.fileTypes ? params.fileTypes.join(', ') : 'All files'}
 - **Max Results:** ${maxResults}
-- **Found:** ${searchResult.snippets.length} relevant code snippets
+- **Found:** ${filesScanned} relevant code snippets
 
 *Search powered by Gemini 2.5 Pro*`,
             },
@@ -3087,41 +3005,21 @@ ${analysis}
         };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        let troubleshootingTips = [];
         
-        // Provide specific tips based on error type
-        if (errorMessage.includes('ENOENT')) {
-          troubleshootingTips = [
-            "✗ **Path Error**: The specified directory doesn't exist or isn't accessible",
-            "• Check the path spelling and ensure it exists",
-            "• For WSL/Linux paths, use absolute paths starting with /",
-            "• For Windows paths, try converting to WSL format",
-            `• Attempted path: ${(error as any)?.path || 'unknown'}`
-          ];
-        } else if (errorMessage.includes('API key')) {
-          troubleshootingTips = [
-            "✗ **API Key Error**: Invalid or missing Gemini API key",
-            "• Get your key from [Google AI Studio](https://makersuite.google.com/app/apikey)",
-            "• Configure it in Smithery during installation",
-            "• Or pass it as geminiApiKey parameter"
-          ];
-        } else if (errorMessage.includes('search')) {
-          troubleshootingTips = [
-            "✗ **Search Error**: Problem during code search",
-            "• Try with a simpler search query",
-            "• Check if the project directory is accessible",
-            "• Verify file types are correct (e.g., ['.ts', '.js'])"
-          ];
-        } else {
-          troubleshootingTips = [
-            "✗ **General Error**: Something went wrong during search",
-            "• Verify the project path exists and is accessible",
-            "• Ensure your Gemini API key is valid",
-            "• Try with a simpler search query",
-            "• Check that the project directory contains readable files"
-          ];
-        }
-
+        // Check if it's a rate limit, quota, overload or invalid key error
+        const isRotatableError = errorMessage && (
+          errorMessage.includes('429') || 
+          errorMessage.includes('Too Many Requests') || 
+          errorMessage.includes('quota') || 
+          errorMessage.includes('rate limit') ||
+          errorMessage.includes('exceeded your current quota') ||
+          errorMessage.includes('API key not valid') ||
+          errorMessage.includes('503') ||
+          errorMessage.includes('Service Unavailable') ||
+          errorMessage.includes('overloaded') ||
+          errorMessage.includes('Please try again later')
+        );
+        
         return {
           content: [
             {
@@ -3132,16 +3030,20 @@ ${analysis}
 
 ### Troubleshooting Guide
 
-${troubleshootingTips.join('\n')}
+${isRotatableError ? '⚠️ **API Error**: This appears to be a rate limit or service issue' : '✗ **General Error**: Something went wrong'}
+• Verify your codebase context is properly formatted
+• Ensure your Gemini API key is valid
+• Check that the search query is clear and specific
+• Try with a simpler search query or smaller codebase
 
 ---
 
 ### Need Help?
 - Check your API key at: https://makersuite.google.com/app/apikey
-- Ensure the project path is accessible to the server
-- Try with a simpler search query or use the comprehensive analyzer
+- Ensure the codebase context contains readable text
+- Try with a more specific search query
 
-*Error occurred during: ${errorMessage.includes('ENOENT') ? 'Path validation' : errorMessage.includes('API key') ? 'API key validation' : errorMessage.includes('search') ? 'Code search' : 'AI analysis'}*`,
+*Error occurred during: Code search analysis*`,
             },
           ],
           isError: true,

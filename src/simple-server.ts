@@ -3434,20 +3434,23 @@ ${groupsData}
           });
         }
 
-        // Analyze each group
-        const groupResults: string[] = [];
+        // Analyze each group in parallel with delay
         const systemPrompt = SYSTEM_PROMPTS[params.analysisMode as keyof typeof SYSTEM_PROMPTS] || SYSTEM_PROMPTS.general;
-
-        for (let i = 0; i < groups.length; i++) {
-          const group = groups[i];
+        
+        // Create async function for each group analysis
+        const analyzeGroup = async (group: FileGroup, index: number, delayMs: number = 0): Promise<string> => {
+          // Add delay to prevent API rate limiting
+          if (delayMs > 0) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          }
           
           try {
             const groupContext = group.files.map(f => `--- File: ${f.filePath} ---\n${f.content}`).join('\n\n');
             
             const groupPrompt = `${systemPrompt}
 
-**GROUP CONTEXT (${i + 1}/${groups.length}):**
-This is group ${i + 1} of ${groups.length} from a large project analysis. ${group.name ? `Group Name: "${group.name}"` : ''} ${group.description ? `Group Description: ${group.description}` : ''}
+**GROUP CONTEXT (${index + 1}/${groups.length}):**
+This is group ${index + 1} of ${groups.length} from a large project analysis. ${group.name ? `Group Name: "${group.name}"` : ''} ${group.description ? `Group Description: ${group.description}` : ''}
 
 ${group.reasoning ? `**AI Grouping Reasoning:** ${group.reasoning}` : ''}
 
@@ -3460,7 +3463,7 @@ ${groupContext}
 **USER QUESTION:**
 ${params.question}
 
-Please analyze this subset of the project in the context of the user's question. ${group.name ? `Focus on the "${group.name}" aspect as this group was specifically created for that purpose.` : `Remember this is part ${i + 1} of ${groups.length} total parts.`}`;
+Please analyze this subset of the project in the context of the user's question. ${group.name ? `Focus on the "${group.name}" aspect as this group was specifically created for that purpose.` : `Remember this is part ${index + 1} of ${groups.length} total parts.`}`;
 
             const groupResult = await retryWithApiKeyRotation(
               (apiKey: string) => new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: "gemini-2.5-pro" }),
@@ -3470,16 +3473,30 @@ Please analyze this subset of the project in the context of the user's question.
 
             const groupResponse = await groupResult.response;
             const groupAnalysis = groupResponse.text();
-            groupResults.push(groupAnalysis);
+            
+            logger.info('Completed group analysis', {
+              groupIndex: index + 1,
+              responseLength: groupAnalysis.length
+            });
+            
+            return groupAnalysis;
 
           } catch (error) {
             logger.error('Failed to analyze group', {
-              groupIndex: i + 1,
+              groupIndex: index + 1,
               error: error instanceof Error ? error.message : 'Unknown error'
             });
-            groupResults.push(`**Group ${i + 1} Analysis Failed:** ${error instanceof Error ? error.message : 'Unknown error'}`);
+            return `**Group ${index + 1} Analysis Failed:** ${error instanceof Error ? error.message : 'Unknown error'}`;
           }
-        }
+        };
+
+        // Launch all group analyses in parallel with staggered delays
+        const groupPromises = groups.map((group, index) => 
+          analyzeGroup(group, index, index * 700) // 0.7 second delay between each group
+        );
+
+        // Wait for all analyses to complete
+        const groupResults = await Promise.all(groupPromises);
 
         // Aggregate all results
         const finalAnalysis = aggregateAnalysisResults(groupResults, params.question, params.analysisMode);

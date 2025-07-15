@@ -1308,18 +1308,25 @@ Execute flawlessly with JavaScript game development excellence.`,
 };
 
 // Cross-platform path normalization with security validation
-function normalizeProjectPath(projectPath: string): string {
+function normalizeProjectPath(projectPath: string, clientWorkingDirectory?: string): string {
   let normalizedPath = projectPath;
   
+  // If client working directory is provided and projectPath is relative, resolve it
+  if (clientWorkingDirectory && projectPath === '.') {
+    normalizedPath = clientWorkingDirectory;
+  } else if (clientWorkingDirectory && !path.isAbsolute(projectPath)) {
+    normalizedPath = path.resolve(clientWorkingDirectory, projectPath);
+  }
+  
   // Convert Windows paths to WSL/Unix format
-  if (projectPath.match(/^[A-Za-z]:\\/)) {
-    const drive = projectPath.charAt(0).toLowerCase();
-    const pathWithoutDrive = projectPath.slice(3).replace(/\\/g, '/');
+  if (normalizedPath.match(/^[A-Za-z]:\\/)) {
+    const drive = normalizedPath.charAt(0).toLowerCase();
+    const pathWithoutDrive = normalizedPath.slice(3).replace(/\\/g, '/');
     normalizedPath = `/mnt/${drive}/${pathWithoutDrive}`;
   }
   // Handle UNC paths \\server\share -> /server/share  
-  else if (projectPath.startsWith('\\\\')) {
-    normalizedPath = projectPath.replace(/\\/g, '/').substring(1);
+  else if (normalizedPath.startsWith('\\\\')) {
+    normalizedPath = normalizedPath.replace(/\\/g, '/').substring(1);
   }
   
   // Security validation: Check against dangerous paths
@@ -1654,6 +1661,7 @@ const GeminiCodebaseAnalyzerSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'. 💡 NEW USER? Use 'get_usage_guide' tool first to learn all capabilities!"),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
+  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. Automatically set by MCP clients."),
   analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded", "architecture", "cloud", "data", "monitoring", "infrastructure", "compliance", "opensource", "freelancer", "education", "research"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):
 
 📋 GENERAL MODES:
@@ -1711,6 +1719,7 @@ const GeminiCodebaseAnalyzerSchema = z.object({
 const GeminiCodeSearchSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
+  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. Automatically set by MCP clients."),
   searchQuery: z.string().min(1).max(500).describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. 🌍 TIP: Use English for best AI performance! 💡 NEW USER? Use 'get_usage_guide' with 'search-tips' topic first! Examples:
 • 'authentication logic' - Find login/auth code
 • 'error handling' - Find try-catch blocks
@@ -1744,6 +1753,7 @@ const UsageGuideSchema = z.object({
 const DynamicExpertCreateSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
+  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. Automatically set by MCP clients."),
   expertiseHint: z.string().min(1).max(200).optional().describe("🎯 EXPERTISE HINT (optional): Suggest what kind of expert you need. Examples: 'React performance expert', 'Database architect', 'Security auditor', 'DevOps specialist'. Leave empty for automatic expert selection based on your project."),
   ...generateApiKeyFields()
 });
@@ -1752,6 +1762,7 @@ const DynamicExpertCreateSchema = z.object({
 const DynamicExpertAnalyzeSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
+  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. Automatically set by MCP clients."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! This will be analyzed using the custom expert mode created in step 1."),
   expertPrompt: z.string().min(1).max(10000).describe("🎯 EXPERT PROMPT: The custom expert system prompt generated by 'gemini_dynamic_expert_create' tool. Copy the entire expert prompt from the previous step."),
   ...generateApiKeyFields()
@@ -1766,6 +1777,7 @@ const ReadLogFileSchema = z.object({
 const ProjectOrchestratorCreateSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
+  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. Automatically set by MCP clients."),
   analysisMode: z.enum(['general', 'implementation', 'refactoring', 'explanation', 'debugging', 'audit', 'security', 'performance', 'testing', 'documentation', 'migration', 'review', 'onboarding', 'api', 'apex', 'gamedev', 'aiml', 'devops', 'mobile', 'frontend', 'backend', 'database', 'startup', 'enterprise', 'blockchain', 'embedded', 'architecture', 'cloud', 'data', 'monitoring', 'infrastructure', 'compliance', 'opensource', 'freelancer', 'education', 'research']).default('general').describe("🎯 ANALYSIS MODE: Choose the expert that best fits your needs. The orchestrator will use this mode for all file groups to ensure consistent analysis across the entire project."),
   maxTokensPerGroup: z.number().min(100000).max(950000).default(900000).optional().describe("🔢 MAX TOKENS PER GROUP: Maximum tokens per file group (default: 900K, max: 950K). Lower values create smaller groups for more detailed analysis. Higher values allow larger chunks but may hit API limits."),
   ...generateApiKeyFields()
@@ -1775,6 +1787,7 @@ const ProjectOrchestratorCreateSchema = z.object({
 const ProjectOrchestratorAnalyzeSchema = z.object({
   projectPath: z.string().min(1).describe("📁 PROJECT PATH: Use '.' for current directory (recommended), or full path to your project. Examples: '.' (current dir), '/home/user/MyProject', 'C:\\Users\\Name\\Projects\\MyApp'. Only workspace/project directories allowed for security."),
   temporaryIgnore: z.array(z.string()).optional().describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
+  clientWorkingDirectory: z.string().optional().describe("📂 CLIENT WORKING DIRECTORY: The directory where the MCP client is running. Used to resolve relative paths correctly. Automatically set by MCP clients."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! This will be analyzed using the file groups created in step 1."),
   analysisMode: z.enum(['general', 'implementation', 'refactoring', 'explanation', 'debugging', 'audit', 'security', 'performance', 'testing', 'documentation', 'migration', 'review', 'onboarding', 'api', 'apex', 'gamedev', 'aiml', 'devops', 'mobile', 'frontend', 'backend', 'database', 'startup', 'enterprise', 'blockchain', 'embedded', 'architecture', 'cloud', 'data', 'monitoring', 'infrastructure', 'compliance', 'opensource', 'freelancer', 'education', 'research']).default('general').describe("🎯 ANALYSIS MODE: Choose the expert that best fits your needs. Must match the mode used in step 1."),
   fileGroupsData: z.string().min(1).max(50000).describe("📦 FILE GROUPS DATA: The file groups data generated by 'project_orchestrator_create' tool. Copy the entire groups data from step 1."),
@@ -2453,7 +2466,7 @@ ${totalKeys === 0 ? `
         const params = DynamicExpertCreateSchema.parse(request.params.arguments);
         
         // Normalize Windows paths to WSL/Linux format  
-        const normalizedPath = normalizeProjectPath(params.projectPath);
+        const normalizedPath = normalizeProjectPath(params.projectPath, params.clientWorkingDirectory);
         
         // Resolve API keys from multiple sources
         const apiKeys = resolveApiKeys(params);
@@ -2612,7 +2625,7 @@ This custom expert is now ready to provide highly specialized analysis tailored 
         const params = DynamicExpertAnalyzeSchema.parse(request.params.arguments);
         
         // Normalize Windows paths to WSL/Linux format  
-        const normalizedPath = normalizeProjectPath(params.projectPath);
+        const normalizedPath = normalizeProjectPath(params.projectPath, params.clientWorkingDirectory);
         
         // Resolve API keys from multiple sources
         const apiKeys = resolveApiKeys(params);
@@ -2748,7 +2761,7 @@ ${analysis}
         const params = GeminiCodebaseAnalyzerSchema.parse(request.params.arguments);
         
         // Normalize Windows paths to WSL/Linux format  
-        const normalizedPath = normalizeProjectPath(params.projectPath);
+        const normalizedPath = normalizeProjectPath(params.projectPath, params.clientWorkingDirectory);
         
         // Resolve API keys from multiple sources
         const apiKeys = resolveApiKeys(params);
@@ -2914,7 +2927,7 @@ ${troubleshootingTips.join('\n')}
         const params = GeminiCodeSearchSchema.parse(request.params.arguments);
         
         // Normalize Windows paths to WSL/Linux format  
-        const normalizedPath = normalizeProjectPath(params.projectPath);
+        const normalizedPath = normalizeProjectPath(params.projectPath, params.clientWorkingDirectory);
         
         // Resolve API keys from multiple sources
         const apiKeys = resolveApiKeys(params);
@@ -3188,7 +3201,7 @@ ${logContent}
         const params = ProjectOrchestratorCreateSchema.parse(request.params.arguments);
         
         // Normalize Windows paths to WSL/Linux format  
-        const normalizedPath = normalizeProjectPath(params.projectPath);
+        const normalizedPath = normalizeProjectPath(params.projectPath, params.clientWorkingDirectory);
         
         // Resolve API keys from multiple sources
         const apiKeys = resolveApiKeys(params);
@@ -3372,7 +3385,7 @@ ${groupsData}
         const params = ProjectOrchestratorAnalyzeSchema.parse(request.params.arguments);
         
         // Normalize Windows paths to WSL/Linux format  
-        const normalizedPath = normalizeProjectPath(params.projectPath);
+        const normalizedPath = normalizeProjectPath(params.projectPath, params.clientWorkingDirectory);
         
         // Resolve API keys from multiple sources
         const apiKeys = resolveApiKeys(params);

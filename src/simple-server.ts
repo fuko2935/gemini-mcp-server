@@ -95,6 +95,125 @@ function createFileGroups(files: ParsedFile[], maxTokensPerGroup: number): FileG
   return groups;
 }
 
+// GitHub repository handler
+async function cloneAndReadGitHubRepo(githubUrl: string, githubToken?: string): Promise<{context: string, projectName: string}> {
+  const { exec } = require('child_process');
+  const { promisify } = require('util');
+  const execAsync = promisify(exec);
+  
+  // Parse GitHub URL
+  const urlMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+  if (!urlMatch) {
+    throw new Error('Invalid GitHub URL format');
+  }
+  
+  const [, owner, repo] = urlMatch;
+  const repoName = repo.replace(/\.git$/, '');
+  const tempDir = path.join(process.cwd(), 'temp', `${owner}-${repoName}-${Date.now()}`);
+  
+  try {
+    // Create temp directory
+    await fs.mkdir(tempDir, { recursive: true });
+    
+    // Clone repository
+    let cloneUrl = githubUrl;
+    if (githubToken) {
+      cloneUrl = githubUrl.replace('https://github.com/', `https://${githubToken}@github.com/`);
+    }
+    
+    await execAsync(`git clone --depth 1 ${cloneUrl} ${tempDir}`);
+    
+    // Read files using existing logic
+    const files = await glob('**/*', {
+      cwd: tempDir,
+      ignore: [
+        'node_modules/**',
+        '.git/**',
+        'dist/**',
+        'build/**',
+        '.next/**',
+        '*.log',
+        '*.lock',
+        '*.tmp',
+        '.DS_Store',
+        'Thumbs.db',
+        '*.db',
+        '*.sqlite',
+        '*.sqlite3',
+        '__pycache__/**',
+        '.pytest_cache/**',
+        'venv/**',
+        '.venv/**',
+        '.env/**',
+        'logs/**',
+        'temp/**',
+        'tmp/**'
+      ],
+      nodir: true,
+      dot: false
+    });
+
+    const BINARY_EXTENSIONS = [
+      '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.ico', '.svg',
+      '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+      '.zip', '.rar', '.tar', '.gz', '.7z',
+      '.exe', '.dll', '.so', '.dylib',
+      '.mp3', '.mp4', '.avi', '.mov', '.wmv',
+      '.ttf', '.woff', '.woff2', '.eot'
+    ];
+
+    let context = '';
+    let fileCount = 0;
+
+    for (const file of files) {
+      const filePath = path.join(tempDir, file);
+      const ext = path.extname(file).toLowerCase();
+      
+      // Skip binary files
+      if (BINARY_EXTENSIONS.includes(ext)) {
+        continue;
+      }
+
+      try {
+        const content = await fs.readFile(filePath, 'utf-8');
+        
+        // Skip very large files (>100KB)
+        if (content.length > 100000) {
+          continue;
+        }
+
+        // Add file separator and content
+        context += `--- File: ${file} ---\n`;
+        context += content;
+        context += '\n\n';
+        
+        fileCount++;
+        
+        // Prevent context from getting too large
+        if (context.length > 2000000) {
+          break;
+        }
+      } catch (error) {
+        // Skip files that can't be read
+        continue;
+      }
+    }
+
+    return {
+      context,
+      projectName: `${owner}/${repoName}`
+    };
+    
+  } finally {
+    // Clean up temp directory
+    try {
+      await execAsync(`rm -rf ${tempDir}`);
+    } catch (error) {
+      // Ignore cleanup errors
+    }
+  }
+}
+
 // Initialize logging system
 const logsDir = path.join(process.cwd(), 'logs');
 
@@ -1802,7 +1921,17 @@ function generateApiKeyFields() {
   return fields;
 }
 
-// API Key Status Checker Schema
+// GitHub Repository Analyzer Schema - Remote version for Smithery AI
+const GithubRepositoryAnalyzerSchema = z.object({
+  githubUrl: z.string().url().describe("🌐 GITHUB URL: Full GitHub repository URL. Examples: 'https://github.com/user/repo', 'https://github.com/user/repo/tree/branch-name'. For private repos, also provide GitHub token below."),
+  githubToken: z.string().optional().describe("🔑 GITHUB TOKEN (Private repos only): Personal access token for private repositories. Get from: https://github.com/settings/tokens. Leave empty for public repos."),
+  question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'"),
+  analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded", "architecture", "cloud", "data", "monitoring", "infrastructure", "compliance", "opensource", "freelancer", "education", "research"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):`),
+  geminiApiKeys: z.string().min(1).optional().describe("🔑 GEMINI API KEYS: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey"),
+  ...generateApiKeyFields()
+});
+
+// API Key Status Checker Schema  
 const ApiKeyStatusSchema = z.object({
   geminiApiKeys: z.string().min(1).optional().describe("🔑 GEMINI API KEYS: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey"),
   ...generateApiKeyFields()
@@ -1978,8 +2107,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(DynamicExpertAnalyzeSchema),
       },
       {
-        name: "gemini_codebase_analyzer",
-        description: "🔍 COMPREHENSIVE CODEBASE ANALYSIS - **MAIN TOOL** Deep dive into entire project with expert analysis modes. 36 specialized modes: frontend, backend, security, devops, AI/ML, blockchain, etc. Perfect for understanding architecture, code reviews, explanations, debugging, and more. **REQUIRES CLIENT-SIDE FILE READING** - see 'client-side-setup' in usage guide.",
+        name: "github_repository_analyzer",
+        description: "🌐 GITHUB REPOSITORY ANALYSIS - **EASIEST FOR REMOTE** Analyze any GitHub repository with just the URL! Supports both public and private repos. Perfect for Smithery AI and remote usage. All 36 analysis modes available.",
+        inputSchema: zodToJsonSchema(GithubRepositoryAnalyzerSchema),
+      },
+      {
+        name: "gemini_codebase_analyzer", 
+        description: "🔍 MANUAL CODEBASE ANALYSIS - For pre-formatted content. Requires manually prepared codebase content. Use 'github_repository_analyzer' for easier workflow with GitHub repos.",
         inputSchema: zodToJsonSchema(GeminiCodebaseAnalyzerSchema),
       },
       {
@@ -3129,6 +3263,126 @@ ${analysis}
 - Try with a simpler question or smaller project
 
 *Error occurred during: ${error.message.includes('ENOENT') ? 'Path validation' : error.message.includes('API key') ? 'API key validation' : 'Dynamic expert analysis'}*`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+    case "github_repository_analyzer":
+      try {
+        const params = GithubRepositoryAnalyzerSchema.parse(request.params.arguments);
+        
+        logger.info(`Analyzing GitHub repository: ${params.githubUrl}`);
+        
+        // Clone and read GitHub repository
+        const { context, projectName } = await cloneAndReadGitHubRepo(params.githubUrl, params.githubToken);
+        
+        // Check for API keys
+        const apiKeys: string[] = [];
+        if (params.geminiApiKeys) {
+          apiKeys.push(...params.geminiApiKeys.split(',').map((key: string) => key.trim()));
+        }
+        if (process.env.GEMINI_API_KEY) {
+          apiKeys.push(process.env.GEMINI_API_KEY);
+        }
+        
+        if (apiKeys.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `# GitHub Repository Analysis - API Key Required
+
+❌ **No Gemini API keys available**
+
+**Please provide at least one API key:**
+- Set \`GEMINI_API_KEY\` environment variable, or
+- Provide \`geminiApiKeys\` parameter in your request
+
+**Get your API key at:** https://makersuite.google.com/app/apikey
+
+**Need help?** Use \`get_usage_guide\` tool with topic \`troubleshooting\``,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Analyze the repository using Gemini API
+        const systemPrompt = SYSTEM_PROMPTS[params.analysisMode as keyof typeof SYSTEM_PROMPTS] || SYSTEM_PROMPTS.general;
+        const prompt = `${systemPrompt}\n\n---\n\n# Project: ${projectName}\n\n# Question: ${params.question}\n\n# Codebase Context:\n${context}`;
+        
+        let analysisResult = '';
+        for (const apiKey of apiKeys) {
+          try {
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+            
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            
+            if (response.text()) {
+              analysisResult = response.text();
+              break;
+            }
+          } catch (error) {
+            // Try next API key if this one fails
+            continue;
+          }
+        }
+        
+        if (!analysisResult) {
+          throw new Error('All API keys failed or returned empty response');
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `# GitHub Repository Analysis Results
+
+## Repository: ${projectName}
+
+**GitHub URL:** ${params.githubUrl}
+**Question:** ${params.question}
+**Analysis Mode:** ${params.analysisMode || "general"}
+
+**Repository Type:** ${params.githubToken ? 'Private' : 'Public'}
+**Content Size:** ${context.length.toLocaleString()} characters
+
+---
+
+## Analysis
+
+${analysisResult}
+
+---
+
+*Analysis powered by Gemini 2.5 Pro in ${params.analysisMode || "general"} mode*`,
+            },
+          ],
+        };
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`GitHub analysis error: ${errorMessage}`);
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: `# GitHub Repository Analysis - Error
+
+❌ **Error analyzing repository:** ${errorMessage}
+
+**Common solutions:**
+- Check GitHub URL format: \`https://github.com/user/repo\`
+- For private repos, provide valid GitHub token
+- Ensure repository exists and is accessible
+- Check Gemini API key is valid
+
+**Need help?** Use \`get_usage_guide\` tool with topic \`troubleshooting\``,
             },
           ],
           isError: true,

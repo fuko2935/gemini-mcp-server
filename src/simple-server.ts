@@ -1813,7 +1813,7 @@ const GeminiCodebaseAnalyzerSchema = z.object({
   codebaseContext: z.string().min(1).describe("📁 CODEBASE CONTENT: The full content of your project files concatenated together. This should include all relevant source files with their file paths as separators. Format: '--- File: path/to/file ---\\n<file content>\\n\\n'. This content will be analyzed by Gemini AI."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'. 💡 NEW USER? Use 'get_usage_guide' tool first to learn all capabilities!"),
   projectName: z.string().optional().describe("📋 PROJECT NAME: Optional name for your project to provide better context in the analysis results."),
-  analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded", "architecture", "cloud", "data", "monitoring", "infrastructure", "compliance", "opensource", "freelancer", "education", "research", "microservices", "serverless", "containerization", "cicd", "deployment", "scalability", "reliability", "observability", "optimization", "profiling", "benchmarking", "loadtest", "integration", "e2e", "unit", "functional", "accessibility", "seo", "pwa", "spa", "ssr", "jamstack", "headless", "cms", "ecommerce", "fintech", "healthcare", "legal", "saas", "b2b", "b2c", "mvp", "prototype", "poc", "legacy", "modernization", "hotfix", "patch", "release", "versioning", "maintenance", "incident", "postmortem", "backup", "disaster", "governance", "policy", "standards", "best-practices", "anti-patterns", "technical-debt", "clean-code", "solid", "patterns", "design-patterns", "architecture-patterns", "domain-driven", "event-sourcing", "cqrs", "hexagonal", "clean-architecture", "resilience", "chaos-engineering", "high-availability", "zero-downtime", "blue-green", "canary", "feature-flags", "ab-testing", "analytics", "telemetry", "tracing", "distributed-tracing", "service-mesh", "networking", "storage", "caching", "kafka", "redis", "elasticsearch", "mongodb", "postgresql", "mysql", "nginx", "kubernetes", "docker", "aws", "azure", "gcp", "terraform", "ansible", "jenkins", "github-actions", "oauth", "jwt", "encryption", "vulnerability", "penetration", "gdpr", "hipaa", "owasp", "secrets-management", "zero-trust", "cors", "csrf", "xss", "sql-injection", "smart-contract", "defi", "web3", "ethereum", "solidity", "layer2", "consensus", "cryptography", "zero-knowledge", "quantum-computing", "machine-learning", "deep-learning", "neural-networks", "computer-vision", "nlp", "robotics", "iot", "edge-computing", "5g", "ar", "vr", "metaverse", "nft", "dao", "defi", "cross-platform", "react-native", "flutter", "electron", "tauri", "webassembly", "rust", "go", "python", "javascript", "typescript", "java", "csharp", "cpp", "swift", "kotlin", "php", "ruby", "scala", "elixir", "clojure", "haskell", "f-sharp", "dart", "solidity", "move", "cairo", "vyper"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):
+  analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded", "architecture", "cloud", "data", "monitoring", "infrastructure", "compliance", "opensource", "freelancer", "education", "research"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):
 
 📋 GENERAL MODES:
 • general (default) - Balanced analysis for any question
@@ -1892,7 +1892,7 @@ const UsageGuideSchema = z.object({
 • overview - What this MCP server does and its capabilities
 • getting-started - First steps and basic usage
 • client-side-setup - How to set up client-side file reading (REQUIRED)
-• analysis-modes - Detailed guide to all 150+ analysis modes
+• analysis-modes - Detailed guide to all 36 analysis modes
 • search-tips - How to write effective search queries
 • examples - Real-world usage examples and workflows
 • troubleshooting - Common issues and solutions
@@ -1946,7 +1946,7 @@ const ProjectOrchestratorAnalyzeSchema = z.object({
 const server = new Server({
   name: "gemini-mcp-server",
   version: "1.0.0",
-  description: "🚀 GEMINI AI CODEBASE ASSISTANT - Your expert coding companion with 150+ specialized analysis modes! Client-side architecture for Docker compatibility. 💡 START HERE: Use 'get_usage_guide' tool to learn all capabilities and 'client-side-setup' for required file reading setup."
+  description: "🚀 GEMINI AI CODEBASE ASSISTANT - Your expert coding companion with 36 specialized analysis modes! Client-side architecture for Docker compatibility. 💡 START HERE: Use 'get_usage_guide' tool to learn all capabilities and 'client-side-setup' for required file reading setup."
 }, {
   capabilities: {
     tools: {},
@@ -1979,7 +1979,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "gemini_codebase_analyzer",
-        description: "🔍 COMPREHENSIVE CODEBASE ANALYSIS - **MAIN TOOL** Deep dive into entire project with expert analysis modes. 150+ specialized modes: frontend, backend, security, devops, AI/ML, blockchain, quantum, languages, frameworks, etc. Perfect for understanding architecture, code reviews, explanations, debugging, and more. **REQUIRES CLIENT-SIDE FILE READING** - see 'client-side-setup' in usage guide.",
+        description: "🔍 COMPREHENSIVE CODEBASE ANALYSIS - **MAIN TOOL** Deep dive into entire project with expert analysis modes. 36 specialized modes: frontend, backend, security, devops, AI/ML, blockchain, etc. Perfect for understanding architecture, code reviews, explanations, debugging, and more. **REQUIRES CLIENT-SIDE FILE READING** - see 'client-side-setup' in usage guide.",
         inputSchema: zodToJsonSchema(GeminiCodebaseAnalyzerSchema),
       },
       {
@@ -2024,11 +2024,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           overview: `# 🚀 Gemini AI Codebase Assistant - Overview
 
 ## What This MCP Server Does
-This is your expert coding companion with **150+ specialized analysis modes** and **3 powerful tools**:
+This is your expert coding companion with **36 specialized analysis modes** and **3 powerful tools**:
 
 ### 🔍 **gemini_codebase_analyzer** - Deep Analysis
 - Comprehensive codebase analysis with expert system prompts
-- 150+ specialized modes: frontend, backend, security, devops, ai/ml, blockchain, quantum, etc.
+- 36 specialized modes: frontend, backend, security, devops, ai/ml, blockchain, etc.
 - Perfect for understanding architecture, code reviews, explanations
 - Processes entire project context for thorough insights
 
@@ -2104,18 +2104,18 @@ All AI models (including Gemini) perform significantly better with English promp
 - Visit: https://makersuite.google.com/app/apikey
 - Or set in environment: \`GEMINI_API_KEY=your_key\``,
 
-          "analysis-modes": `# 🎯 Complete Guide to 150+ Analysis Modes
+          "analysis-modes": `# 🎯 Complete Guide to 36 Analysis Modes
 
 ## 🎯 HOW TO USE MODES
 Choose the mode that best matches your specific need. Each mode has a specialized expert prompt optimized for that particular domain or task.
 
 **Example usage:**
-- For React apps: \`frontend\` or \`react-native\`
+- For React apps: \`frontend\`
 - For APIs: \`backend\` or \`api\`
-- For security: \`security\` or \`penetration\`
-- For DevOps: \`devops\` or \`kubernetes\`
-- For AI/ML: \`aiml\` or \`machine-learning\`
-- For blockchain: \`blockchain\` or \`smart-contract\`
+- For security: \`security\`
+- For DevOps: \`devops\`
+- For AI/ML: \`aiml\`
+- For blockchain: \`blockchain\`
 
 ## 📋 GENERAL MODES (Perfect for beginners)
 - **\`general\`** - Balanced analysis for any question
@@ -2148,158 +2148,6 @@ Choose the mode that best matches your specific need. Each mode has a specialize
 - **\`startup\`** - MVP development, rapid prototyping
 - **\`enterprise\`** - Large-scale systems, corporate integration
 - **\`blockchain\`** - Web3, smart contracts, DeFi
-
-## 🔧 DEVOPS & DEPLOYMENT MODES
-- **\`microservices\`** - Microservices architecture and patterns
-- **\`serverless\`** - Serverless applications and functions
-- **\`containerization\`** - Docker, Kubernetes, container orchestration
-- **\`cicd\`** - CI/CD pipelines and automation
-- **\`deployment\`** - Deployment strategies and processes
-- **\`scalability\`** - Scalable system design and optimization
-- **\`reliability\`** - System reliability and fault tolerance
-- **\`observability\`** - Monitoring, logging, and tracing
-- **\`kubernetes\`** - Kubernetes-specific analysis
-- **\`docker\`** - Docker and containerization
-- **\`aws\`** - AWS cloud services and patterns
-- **\`azure\`** - Microsoft Azure cloud services
-- **\`gcp\`** - Google Cloud Platform services
-- **\`terraform\`** - Infrastructure as Code with Terraform
-- **\`ansible\`** - Configuration management with Ansible
-
-## 🔒 SECURITY & COMPLIANCE MODES
-- **\`penetration\`** - Penetration testing and vulnerability assessment
-- **\`vulnerability\`** - Vulnerability scanning and analysis
-- **\`encryption\`** - Cryptography and encryption implementation
-- **\`oauth\`** - OAuth and authentication systems
-- **\`jwt\`** - JSON Web Token implementation
-- **\`gdpr\`** - GDPR compliance and data protection
-- **\`hipaa\`** - HIPAA compliance for healthcare
-- **\`owasp\`** - OWASP security guidelines
-- **\`secrets-management\`** - Secrets and credential management
-- **\`zero-trust\`** - Zero-trust security architecture
-- **\`cors\`** - Cross-Origin Resource Sharing
-- **\`csrf\`** - Cross-Site Request Forgery protection
-- **\`xss\`** - Cross-Site Scripting prevention
-- **\`sql-injection\`** - SQL injection prevention
-
-## 🌐 WEB & FRONTEND MODES
-- **\`pwa\`** - Progressive Web Applications
-- **\`spa\`** - Single Page Applications
-- **\`ssr\`** - Server-Side Rendering
-- **\`jamstack\`** - JAMstack architecture
-- **\`headless\`** - Headless CMS and architecture
-- **\`cms\`** - Content Management Systems
-- **\`accessibility\`** - Web accessibility (a11y)
-- **\`seo\`** - Search Engine Optimization
-- **\`react-native\`** - React Native mobile development
-- **\`flutter\`** - Flutter cross-platform development
-- **\`electron\`** - Electron desktop applications
-- **\`webassembly\`** - WebAssembly optimization
-
-## 🗄️ DATABASE & STORAGE MODES
-- **\`mongodb\`** - MongoDB NoSQL database
-- **\`postgresql\`** - PostgreSQL relational database
-- **\`mysql\`** - MySQL database systems
-- **\`redis\`** - Redis caching and data structures
-- **\`elasticsearch\`** - Elasticsearch search and analytics
-- **\`kafka\`** - Apache Kafka streaming
-- **\`storage\`** - Data storage solutions
-- **\`caching\`** - Caching strategies and implementation
-
-## 💼 INDUSTRY & DOMAIN MODES
-- **\`ecommerce\`** - E-commerce platforms and systems
-- **\`fintech\`** - Financial technology applications
-- **\`healthcare\`** - Healthcare and medical systems
-- **\`legal\`** - Legal technology and compliance
-- **\`saas\`** - Software as a Service applications
-- **\`b2b\`** - Business-to-Business applications
-- **\`b2c\`** - Business-to-Consumer applications
-
-## 🛠️ DEVELOPMENT & MAINTENANCE MODES
-- **\`mvp\`** - Minimum Viable Product development
-- **\`prototype\`** - Prototyping and proof of concept
-- **\`poc\`** - Proof of Concept development
-- **\`legacy\`** - Legacy system analysis
-- **\`modernization\`** - System modernization
-- **\`hotfix\`** - Hotfix and emergency patches
-- **\`patch\`** - Patch management and updates
-- **\`release\`** - Release management and deployment
-- **\`versioning\`** - Version control and management
-- **\`maintenance\`** - System maintenance and support
-
-## 📊 TESTING & QUALITY MODES
-- **\`integration\`** - Integration testing
-- **\`e2e\`** - End-to-end testing
-- **\`unit\`** - Unit testing
-- **\`functional\`** - Functional testing
-- **\`loadtest\`** - Load testing and performance
-- **\`benchmarking\`** - Performance benchmarking
-- **\`profiling\`** - Code profiling and optimization
-
-## 🎯 SPECIALIZED TECHNOLOGY MODES
-- **\`smart-contract\`** - Smart contract development
-- **\`defi\`** - Decentralized Finance applications
-- **\`web3\`** - Web3 and decentralized applications
-- **\`ethereum\`** - Ethereum blockchain development
-- **\`solidity\`** - Solidity smart contract language
-- **\`layer2\`** - Layer 2 blockchain solutions
-- **\`quantum-computing\`** - Quantum computing algorithms
-- **\`machine-learning\`** - Machine learning models
-- **\`deep-learning\`** - Deep learning neural networks
-- **\`computer-vision\`** - Computer vision systems
-- **\`nlp\`** - Natural Language Processing
-- **\`robotics\`** - Robotics and automation
-- **\`iot\`** - Internet of Things devices
-- **\`ar\`** - Augmented Reality applications
-- **\`vr\`** - Virtual Reality applications
-
-## 💻 PROGRAMMING LANGUAGE MODES
-- **\`javascript\`** - JavaScript-specific analysis
-- **\`typescript\`** - TypeScript development
-- **\`python\`** - Python programming
-- **\`rust\`** - Rust systems programming
-- **\`go\`** - Go programming language
-- **\`java\`** - Java development
-- **\`csharp\`** - C# and .NET development
-- **\`cpp\`** - C++ programming
-- **\`swift\`** - Swift iOS development
-- **\`kotlin\`** - Kotlin Android development
-- **\`php\`** - PHP web development
-- **\`ruby\`** - Ruby programming
-- **\`scala\`** - Scala functional programming
-- **\`elixir\`** - Elixir and Phoenix framework
-- **\`dart\`** - Dart and Flutter development
-
-## 🏗️ ARCHITECTURE & PATTERNS MODES
-- **\`architecture-patterns\`** - Software architecture patterns
-- **\`design-patterns\`** - Design patterns implementation
-- **\`domain-driven\`** - Domain-Driven Design
-- **\`event-sourcing\`** - Event sourcing architecture
-- **\`cqrs\`** - Command Query Responsibility Segregation
-- **\`hexagonal\`** - Hexagonal architecture
-- **\`clean-architecture\`** - Clean architecture principles
-- **\`best-practices\`** - Best practices and conventions
-- **\`anti-patterns\`** - Anti-patterns and code smells
-- **\`technical-debt\`** - Technical debt management
-- **\`clean-code\`** - Clean code principles
-- **\`solid\`** - SOLID principles
-- **\`patterns\`** - General design patterns
-
-## 📈 MONITORING & ANALYTICS MODES
-- **\`analytics\`** - Analytics and data tracking
-- **\`telemetry\`** - Application telemetry
-- **\`tracing\`** - Distributed tracing
-- **\`distributed-tracing\`** - Distributed system tracing
-- **\`networking\`** - Network architecture and protocols
-- **\`service-mesh\`** - Service mesh architecture
-
-## 🎓 EDUCATIONAL & RESEARCH MODES
-- **\`education\`** - Educational content and tutorials
-- **\`research\`** - Research and academic projects
-- **\`opensource\`** - Open source project development
-- **\`freelancer\`** - Freelance project optimization
-
-- **\`embedded\`** - IoT, hardware programming, edge computing
 
 ## 🏗️ ARCHITECTURE & INFRASTRUCTURE MODES (System-level)
 - **\`architecture\`** - System design, patterns, microservices vs monolith

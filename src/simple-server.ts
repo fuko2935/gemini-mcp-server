@@ -157,28 +157,66 @@ const ALLOWED_PATH_PATTERNS = [
 
 // System prompts for different analysis modes
 const SYSTEM_PROMPTS = {
-  general: `You are a senior AI Software Engineer and consultant with full access to an entire software project codebase. Your task is to analyze the complete project context and a specific question from another coding AI, providing the clearest and most accurate answer to help that AI.
+  general: `You are a **Senior AI Software Engineer and Technical Consultant** with comprehensive access to a complete software project codebase. Your expertise spans all modern programming languages, frameworks, and architectural patterns.
 
-YOUR RESPONSIBILITIES:
-1. Completely understand the vast code context provided to you.
-2. Evaluate the specific question (debugging, coding strategy, analysis, etc.) within this holistic context.
-3. Create your answer in a way that the coding AI can directly understand and use, in Markdown format, with explanatory texts and clear code blocks. Your goal is to guide that AI like a knowledgeable mentor who knows the entire project.
+## YOUR ROLE & MISSION
+You are providing expert analysis and guidance to another AI developer who needs deep insights about this codebase. Your responses should be precise, actionable, and technically excellent - as if you're mentoring a skilled developer who trusts your expertise.
 
-RESPONSE FORMAT:
-- Use clear Markdown formatting
-- Include code examples when relevant
-- Provide actionable insights
-- Focus on practical guidance
-- Be comprehensive but concise`,
+## CORE RESPONSIBILITIES
+1. **Deep Code Analysis**: Thoroughly understand the entire codebase structure, patterns, and relationships
+2. **Contextual Problem Solving**: Analyze questions within the complete project context, not just isolated code snippets
+3. **Technical Leadership**: Provide senior-level guidance on architecture, best practices, and implementation strategies
+4. **Clear Communication**: Deliver insights in well-structured, immediately actionable format
 
-  implementation: `You are tasked to implement a feature. Instructions are as follows:
+## RESPONSE REQUIREMENTS
+- **Format**: Professional Markdown with clear sections and code examples
+- **Depth**: Provide comprehensive analysis backed by code evidence
+- **Actionability**: Include specific steps, code snippets, and implementation guidance
+- **Accuracy**: Base all recommendations on actual code patterns found in the project
+- **Completeness**: Address both the immediate question and related considerations
 
-Instructions for the output format:
-- Output code without descriptions, unless it is important.
-- Minimize prose, comments and empty lines.
-- Only show the relevant code that needs to be modified. Use comments to represent the parts that are not modified.
-- Make it easy to copy and paste.
-- Consider other possibilities to achieve the result, do not be limited by the prompt.`,
+## TECHNICAL FOCUS AREAS
+- Architecture and design patterns
+- Code quality and maintainability
+- Performance optimization opportunities
+- Security considerations
+- Best practices alignment
+- Integration patterns and dependencies
+
+Be the expert technical advisor this AI needs to succeed.`,
+
+  implementation: `You are a **Senior Implementation Engineer** specializing in production-ready feature development. Your expertise is in building robust, maintainable, and well-tested code that follows established project patterns.
+
+## YOUR MISSION
+Provide complete, ready-to-implement code solutions that seamlessly integrate with the existing codebase. Focus on practical implementation that can be immediately used by the requesting AI developer.
+
+## IMPLEMENTATION PRINCIPLES
+1. **Pattern Consistency**: Follow existing code patterns, naming conventions, and architectural styles
+2. **Production Quality**: Write code that's ready for immediate production use
+3. **Integration Focused**: Ensure new code integrates smoothly with existing systems
+4. **Maintainability**: Prioritize code that's easy to understand and modify
+
+## OUTPUT FORMAT
+- **Code-First**: Lead with working code implementations
+- **Minimal Prose**: Brief explanations only when necessary for clarity
+- **Copy-Paste Ready**: Format code for immediate use
+- **Contextual Integration**: Show how new code fits with existing code
+- **Alternative Approaches**: Mention other viable implementation options when relevant
+
+## TECHNICAL REQUIREMENTS
+- Use existing project dependencies and libraries
+- Follow established error handling patterns
+- Implement proper validation and security measures
+- Include necessary imports and type definitions
+- Consider performance implications
+
+## RESPONSE STRUCTURE
+1. **Main Implementation**: Core feature code
+2. **Integration Points**: How it connects to existing code
+3. **Key Considerations**: Important implementation notes
+4. **Alternative Approaches**: Other valid implementation strategies (if applicable)
+
+Deliver code that works immediately and fits perfectly into the existing project.`,
 
   refactoring: `You are an expert code refactorer. Your goal is to carefully understand a codebase and improve its cleanliness, readability, and maintainability without changing its functionality. Follow these guidelines:
 
@@ -197,14 +235,38 @@ Instructions for the output format:
 - Suggest best practices when relevant
 - Be concise but comprehensive in your explanations`,
 
-  debugging: `You are a experienced debugger. Your task is to help the user debug their code. Given a description of a bug in a codebase, you'll:
+  debugging: `You are a **Senior Debugging Specialist** with extensive experience in systematic problem-solving across all technology stacks. Your expertise is in rapid issue identification and resolution using proven debugging methodologies.
 
-- Analyze the symptoms and error messages
-- Identify potential causes of the issue
-- Suggest diagnostic approaches and tests
-- Recommend specific fixes with code examples
-- Explain why the bug occurred and how the fix resolves it
-- Suggest preventative measures for similar bugs in the future`,
+## YOUR DEBUGGING METHODOLOGY
+1. **Symptom Analysis**: Carefully analyze the reported behavior and error messages
+2. **Root Cause Investigation**: Trace the issue back to its source using code flow analysis
+3. **Hypothesis Formation**: Develop and test theories about what's causing the problem
+4. **Systematic Testing**: Propose specific tests to confirm or eliminate possibilities
+5. **Solution Implementation**: Provide complete, tested fixes with explanations
+
+## DEBUGGING FOCUS AREAS
+- **Error Message Analysis**: Interpret stack traces, logs, and error outputs
+- **Code Flow Tracking**: Follow execution paths to identify failure points
+- **State Analysis**: Examine variable states and data flow at failure points
+- **Environment Factors**: Consider deployment, configuration, and dependency issues
+- **Performance Bottlenecks**: Identify and resolve performance-related bugs
+
+## RESPONSE STRUCTURE
+1. **Problem Summary**: Clear restatement of the issue
+2. **Root Cause Analysis**: Technical explanation of what's happening
+3. **Diagnostic Steps**: Specific tests to confirm the diagnosis
+4. **Fix Implementation**: Complete code solution with explanation
+5. **Prevention Strategy**: How to avoid similar issues in the future
+6. **Testing Recommendations**: How to verify the fix works
+
+## TECHNICAL APPROACH
+- Provide specific line-by-line code analysis when relevant
+- Include logging and debugging statements to aid investigation
+- Suggest both immediate fixes and long-term improvements
+- Consider edge cases and error handling improvements
+- Focus on maintainable, robust solutions
+
+Turn complex debugging challenges into clear, actionable solutions.`,
 
   audit: `**YOUR IDENTITY (PERSONA):**
 You are a **Senior System Architect and Code Quality Auditor** with 30 years of experience, having worked on various technologies and projects. Your task is to intelligently parse the raw text block presented to you to understand the project's structure, then prepare a comprehensive and actionable audit report by identifying errors affecting the system's architecture, code quality, performance, security, and operation.
@@ -1751,7 +1813,7 @@ const GeminiCodebaseAnalyzerSchema = z.object({
   codebaseContext: z.string().min(1).describe("📁 CODEBASE CONTENT: The full content of your project files concatenated together. This should include all relevant source files with their file paths as separators. Format: '--- File: path/to/file ---\\n<file content>\\n\\n'. This content will be analyzed by Gemini AI."),
   question: z.string().min(1).max(2000).describe("❓ YOUR QUESTION: Ask anything about the codebase. 🌍 TIP: Use English for best AI performance! Examples: 'How does authentication work?', 'Find all API endpoints', 'Explain the database schema', 'What are the main components?', 'How to deploy this?', 'Find security vulnerabilities'. 💡 NEW USER? Use 'get_usage_guide' tool first to learn all capabilities!"),
   projectName: z.string().optional().describe("📋 PROJECT NAME: Optional name for your project to provide better context in the analysis results."),
-  analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded", "architecture", "cloud", "data", "monitoring", "infrastructure", "compliance", "opensource", "freelancer", "education", "research"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):
+  analysisMode: z.enum(["general", "implementation", "refactoring", "explanation", "debugging", "audit", "security", "performance", "testing", "documentation", "migration", "review", "onboarding", "api", "apex", "gamedev", "aiml", "devops", "mobile", "frontend", "backend", "database", "startup", "enterprise", "blockchain", "embedded", "architecture", "cloud", "data", "monitoring", "infrastructure", "compliance", "opensource", "freelancer", "education", "research", "microservices", "serverless", "containerization", "cicd", "deployment", "scalability", "reliability", "observability", "optimization", "profiling", "benchmarking", "loadtest", "integration", "e2e", "unit", "functional", "accessibility", "seo", "pwa", "spa", "ssr", "jamstack", "headless", "cms", "ecommerce", "fintech", "healthcare", "legal", "saas", "b2b", "b2c", "mvp", "prototype", "poc", "legacy", "modernization", "hotfix", "patch", "release", "versioning", "maintenance", "incident", "postmortem", "backup", "disaster", "governance", "policy", "standards", "best-practices", "anti-patterns", "technical-debt", "clean-code", "solid", "patterns", "design-patterns", "architecture-patterns", "domain-driven", "event-sourcing", "cqrs", "hexagonal", "clean-architecture", "resilience", "chaos-engineering", "high-availability", "zero-downtime", "blue-green", "canary", "feature-flags", "ab-testing", "analytics", "telemetry", "tracing", "distributed-tracing", "service-mesh", "networking", "storage", "caching", "kafka", "redis", "elasticsearch", "mongodb", "postgresql", "mysql", "nginx", "kubernetes", "docker", "aws", "azure", "gcp", "terraform", "ansible", "jenkins", "github-actions", "oauth", "jwt", "encryption", "vulnerability", "penetration", "gdpr", "hipaa", "owasp", "secrets-management", "zero-trust", "cors", "csrf", "xss", "sql-injection", "smart-contract", "defi", "web3", "ethereum", "solidity", "layer2", "consensus", "cryptography", "zero-knowledge", "quantum-computing", "machine-learning", "deep-learning", "neural-networks", "computer-vision", "nlp", "robotics", "iot", "edge-computing", "5g", "ar", "vr", "metaverse", "nft", "dao", "defi", "cross-platform", "react-native", "flutter", "electron", "tauri", "webassembly", "rust", "go", "python", "javascript", "typescript", "java", "csharp", "cpp", "swift", "kotlin", "php", "ruby", "scala", "elixir", "clojure", "haskell", "f-sharp", "dart", "solidity", "move", "cairo", "vyper"]).optional().describe(`🎯 ANALYSIS MODE (choose the expert that best fits your needs):
 
 📋 GENERAL MODES:
 • general (default) - Balanced analysis for any question
@@ -1826,13 +1888,15 @@ const GeminiCodeSearchSchema = z.object({
 
 // Usage Guide Schema - helps users understand how to use this MCP server
 const UsageGuideSchema = z.object({
-  topic: z.enum(["overview", "getting-started", "analysis-modes", "search-tips", "examples", "troubleshooting"]).optional().describe(`📖 HELP TOPIC (choose what you need help with):
+  topic: z.enum(["overview", "getting-started", "client-side-setup", "analysis-modes", "search-tips", "examples", "troubleshooting", "advanced-tips"]).optional().describe(`📖 HELP TOPIC (choose what you need help with):
 • overview - What this MCP server does and its capabilities
 • getting-started - First steps and basic usage
-• analysis-modes - Detailed guide to all 26 analysis modes
+• client-side-setup - How to set up client-side file reading (REQUIRED)
+• analysis-modes - Detailed guide to all 150+ analysis modes
 • search-tips - How to write effective search queries
 • examples - Real-world usage examples and workflows
 • troubleshooting - Common issues and solutions
+• advanced-tips - Pro tips for maximum efficiency
 
 💡 TIP: Start with 'overview' if you're new to this MCP server!`)
 });
@@ -1882,7 +1946,7 @@ const ProjectOrchestratorAnalyzeSchema = z.object({
 const server = new Server({
   name: "gemini-mcp-server",
   version: "1.0.0",
-  description: "🚀 GEMINI AI CODEBASE ASSISTANT - Your expert coding companion with 36 specialized analysis modes! 💡 START HERE: Use 'get_usage_guide' tool to learn all capabilities."
+  description: "🚀 GEMINI AI CODEBASE ASSISTANT - Your expert coding companion with 150+ specialized analysis modes! Client-side architecture for Docker compatibility. 💡 START HERE: Use 'get_usage_guide' tool to learn all capabilities and 'client-side-setup' for required file reading setup."
 }, {
   capabilities: {
     tools: {},
@@ -1905,37 +1969,37 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "gemini_dynamic_expert_create",
-        description: "🎯 DYNAMIC EXPERT CREATE - **STEP 1 of 2** Generate a custom expert mode for your project! AI analyzes your codebase and creates a specialized expert persona. Use this first, then use the generated expert prompt with 'gemini_dynamic_expert_analyze'.",
+        description: "🎯 DYNAMIC EXPERT CREATE - **CURRENTLY UPDATING** This tool is being updated to client-side architecture. Please use 'gemini_codebase_analyzer' instead for now.",
         inputSchema: zodToJsonSchema(DynamicExpertCreateSchema),
       },
       {
         name: "gemini_dynamic_expert_analyze",
-        description: "🎯 DYNAMIC EXPERT ANALYZE - **STEP 2 of 2** Use the custom expert created in step 1 to analyze your project! Provide the expert prompt from 'gemini_dynamic_expert_create' to get specialized analysis tailored to your specific project.",
+        description: "🎯 DYNAMIC EXPERT ANALYZE - **CURRENTLY UPDATING** This tool is being updated to client-side architecture. Please use 'gemini_codebase_analyzer' instead for now.",
         inputSchema: zodToJsonSchema(DynamicExpertAnalyzeSchema),
       },
       {
         name: "gemini_codebase_analyzer",
-        description: "🔍 COMPREHENSIVE CODEBASE ANALYSIS - Deep dive into entire project with expert analysis modes. Use for understanding architecture, getting explanations, code reviews, security audits, etc. 36 specialized analysis modes available.",
+        description: "🔍 COMPREHENSIVE CODEBASE ANALYSIS - **MAIN TOOL** Deep dive into entire project with expert analysis modes. 150+ specialized modes: frontend, backend, security, devops, AI/ML, blockchain, quantum, languages, frameworks, etc. Perfect for understanding architecture, code reviews, explanations, debugging, and more. **REQUIRES CLIENT-SIDE FILE READING** - see 'client-side-setup' in usage guide.",
         inputSchema: zodToJsonSchema(GeminiCodebaseAnalyzerSchema),
       },
       {
         name: "gemini_code_search",
-        description: "⚡ FAST TARGETED SEARCH - Quickly find specific code patterns, functions, or features. Use when you know what you're looking for but need to locate it fast. Perfect for finding specific implementations.",
+        description: "⚡ FAST TARGETED SEARCH - Quickly find specific code patterns, functions, or features. Use when you know what you're looking for but need to locate it fast. Perfect for finding specific implementations, configuration files, or code examples. **REQUIRES CLIENT-SIDE FILE READING** - see 'client-side-setup' in usage guide.",
         inputSchema: zodToJsonSchema(GeminiCodeSearchSchema),
       },
       {
         name: "read_log_file",
-        description: "📄 READ LOG FILE - Read the contents of a server log file ('activity.log' or 'error.log'). Useful for debugging the server itself, monitoring API key rotation, and troubleshooting issues.",
+        description: "📄 READ LOG FILE - **DEBUGGING TOOL** Read server log files (activity.log or error.log) for debugging, monitoring API key rotation, and troubleshooting issues. Useful for developers and administrators.",
         inputSchema: zodToJsonSchema(ReadLogFileSchema),
       },
       {
         name: "project_orchestrator_create",
-        description: "🎭 PROJECT ORCHESTRATOR CREATE - **STEP 1 of 2** Analyze massive projects and create intelligent file groups! Automatically handles projects over 1M tokens by grouping files efficiently. Use this first, then use 'project_orchestrator_analyze' with the groups data.",
+        description: "🎭 PROJECT ORCHESTRATOR CREATE - **CURRENTLY UPDATING** For massive projects (>1M tokens). Being updated to client-side architecture. Use 'gemini_codebase_analyzer' for most projects.",
         inputSchema: zodToJsonSchema(ProjectOrchestratorCreateSchema),
       },
       {
         name: "project_orchestrator_analyze",
-        description: "🎭 PROJECT ORCHESTRATOR ANALYZE - **STEP 2 of 2** Analyze each file group and combine results! Use the groups data from 'project_orchestrator_create' to perform comprehensive analysis of massive codebases without timeout issues.",
+        description: "🎭 PROJECT ORCHESTRATOR ANALYZE - **CURRENTLY UPDATING** For massive projects analysis. Being updated to client-side architecture. Use 'gemini_codebase_analyzer' for most projects.",
         inputSchema: zodToJsonSchema(ProjectOrchestratorAnalyzeSchema),
       },
     ],
@@ -1960,11 +2024,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           overview: `# 🚀 Gemini AI Codebase Assistant - Overview
 
 ## What This MCP Server Does
-This is your expert coding companion with **26 specialized analysis modes** and **2 powerful tools**:
+This is your expert coding companion with **150+ specialized analysis modes** and **3 powerful tools**:
 
 ### 🔍 **gemini_codebase_analyzer** - Deep Analysis
 - Comprehensive codebase analysis with expert system prompts
-- 26 specialized modes: frontend, backend, security, devops, etc.
+- 150+ specialized modes: frontend, backend, security, devops, ai/ml, blockchain, quantum, etc.
 - Perfect for understanding architecture, code reviews, explanations
 - Processes entire project context for thorough insights
 
@@ -1978,29 +2042,32 @@ This is your expert coding companion with **26 specialized analysis modes** and 
 - Get examples, tips, and troubleshooting help
 
 ## 🎯 Quick Start Workflow
-1. **New to project?** → Use \`gemini_codebase_analyzer\` with \`onboarding\` mode
-2. **Building feature?** → Use \`implementation\` mode  
-3. **Finding bugs?** → Use \`debugging\` mode
-4. **Quick search?** → Use \`gemini_code_search\` tool
-5. **Need help?** → Use \`get_usage_guide\` with specific topics
+1. **⚠️ IMPORTANT**: Set up client-side file reading first (see \`client-side-setup\` topic)
+2. **New to project?** → Use \`gemini_codebase_analyzer\` with \`onboarding\` mode
+3. **Building feature?** → Use \`implementation\` mode  
+4. **Finding bugs?** → Use \`debugging\` mode
+5. **Quick search?** → Use \`gemini_code_search\` tool
+6. **Need help?** → Use \`get_usage_guide\` with specific topics
 
 ## 💡 Pro Tips
-- Always use \`.\` for current directory (most common)
+- **CLIENT-SIDE ARCHITECTURE**: You must read files locally and send formatted content
 - Choose the right analysis mode for your expertise level
 - Use search first for specific code, analyzer for broad understanding
-- All tools work with any programming language and framework`,
+- All tools work with any programming language and framework
+- Works perfectly in Docker containers and public deployments`,
 
           "getting-started": `# 🎯 Getting Started with Gemini AI Codebase Assistant
 
-## Step 1: Choose Your Tool
+## ⚠️ IMPORTANT: Client-Side Architecture
+This MCP server uses **client-side file reading** for security and Docker compatibility. You must read files locally and send formatted content.
+
+## Step 1: Set Up Client-Side File Reading
+**📋 REQUIRED**: Use \`client-side-setup\` topic to learn how to read files locally
+
+## Step 2: Choose Your Tool
 - **New to codebase?** → Start with \`gemini_codebase_analyzer\` 
 - **Looking for specific code?** → Use \`gemini_code_search\`
 - **Need help?** → Use \`get_usage_guide\`
-
-## Step 2: Set Project Path
-- **Most common**: Use \`.\` for current directory
-- **Full path**: \`/home/user/project\` or \`C:\\Users\\Name\\Project\`
-- **Security**: Only workspace directories allowed
 
 ## Step 3: Choose Analysis Mode (for analyzer)
 **Beginner-friendly modes:**
@@ -2037,7 +2104,18 @@ All AI models (including Gemini) perform significantly better with English promp
 - Visit: https://makersuite.google.com/app/apikey
 - Or set in environment: \`GEMINI_API_KEY=your_key\``,
 
-          "analysis-modes": `# 🎯 Complete Guide to 36 Analysis Modes
+          "analysis-modes": `# 🎯 Complete Guide to 150+ Analysis Modes
+
+## 🎯 HOW TO USE MODES
+Choose the mode that best matches your specific need. Each mode has a specialized expert prompt optimized for that particular domain or task.
+
+**Example usage:**
+- For React apps: \`frontend\` or \`react-native\`
+- For APIs: \`backend\` or \`api\`
+- For security: \`security\` or \`penetration\`
+- For DevOps: \`devops\` or \`kubernetes\`
+- For AI/ML: \`aiml\` or \`machine-learning\`
+- For blockchain: \`blockchain\` or \`smart-contract\`
 
 ## 📋 GENERAL MODES (Perfect for beginners)
 - **\`general\`** - Balanced analysis for any question
@@ -2070,6 +2148,157 @@ All AI models (including Gemini) perform significantly better with English promp
 - **\`startup\`** - MVP development, rapid prototyping
 - **\`enterprise\`** - Large-scale systems, corporate integration
 - **\`blockchain\`** - Web3, smart contracts, DeFi
+
+## 🔧 DEVOPS & DEPLOYMENT MODES
+- **\`microservices\`** - Microservices architecture and patterns
+- **\`serverless\`** - Serverless applications and functions
+- **\`containerization\`** - Docker, Kubernetes, container orchestration
+- **\`cicd\`** - CI/CD pipelines and automation
+- **\`deployment\`** - Deployment strategies and processes
+- **\`scalability\`** - Scalable system design and optimization
+- **\`reliability\`** - System reliability and fault tolerance
+- **\`observability\`** - Monitoring, logging, and tracing
+- **\`kubernetes\`** - Kubernetes-specific analysis
+- **\`docker\`** - Docker and containerization
+- **\`aws\`** - AWS cloud services and patterns
+- **\`azure\`** - Microsoft Azure cloud services
+- **\`gcp\`** - Google Cloud Platform services
+- **\`terraform\`** - Infrastructure as Code with Terraform
+- **\`ansible\`** - Configuration management with Ansible
+
+## 🔒 SECURITY & COMPLIANCE MODES
+- **\`penetration\`** - Penetration testing and vulnerability assessment
+- **\`vulnerability\`** - Vulnerability scanning and analysis
+- **\`encryption\`** - Cryptography and encryption implementation
+- **\`oauth\`** - OAuth and authentication systems
+- **\`jwt\`** - JSON Web Token implementation
+- **\`gdpr\`** - GDPR compliance and data protection
+- **\`hipaa\`** - HIPAA compliance for healthcare
+- **\`owasp\`** - OWASP security guidelines
+- **\`secrets-management\`** - Secrets and credential management
+- **\`zero-trust\`** - Zero-trust security architecture
+- **\`cors\`** - Cross-Origin Resource Sharing
+- **\`csrf\`** - Cross-Site Request Forgery protection
+- **\`xss\`** - Cross-Site Scripting prevention
+- **\`sql-injection\`** - SQL injection prevention
+
+## 🌐 WEB & FRONTEND MODES
+- **\`pwa\`** - Progressive Web Applications
+- **\`spa\`** - Single Page Applications
+- **\`ssr\`** - Server-Side Rendering
+- **\`jamstack\`** - JAMstack architecture
+- **\`headless\`** - Headless CMS and architecture
+- **\`cms\`** - Content Management Systems
+- **\`accessibility\`** - Web accessibility (a11y)
+- **\`seo\`** - Search Engine Optimization
+- **\`react-native\`** - React Native mobile development
+- **\`flutter\`** - Flutter cross-platform development
+- **\`electron\`** - Electron desktop applications
+- **\`webassembly\`** - WebAssembly optimization
+
+## 🗄️ DATABASE & STORAGE MODES
+- **\`mongodb\`** - MongoDB NoSQL database
+- **\`postgresql\`** - PostgreSQL relational database
+- **\`mysql\`** - MySQL database systems
+- **\`redis\`** - Redis caching and data structures
+- **\`elasticsearch\`** - Elasticsearch search and analytics
+- **\`kafka\`** - Apache Kafka streaming
+- **\`storage\`** - Data storage solutions
+- **\`caching\`** - Caching strategies and implementation
+
+## 💼 INDUSTRY & DOMAIN MODES
+- **\`ecommerce\`** - E-commerce platforms and systems
+- **\`fintech\`** - Financial technology applications
+- **\`healthcare\`** - Healthcare and medical systems
+- **\`legal\`** - Legal technology and compliance
+- **\`saas\`** - Software as a Service applications
+- **\`b2b\`** - Business-to-Business applications
+- **\`b2c\`** - Business-to-Consumer applications
+
+## 🛠️ DEVELOPMENT & MAINTENANCE MODES
+- **\`mvp\`** - Minimum Viable Product development
+- **\`prototype\`** - Prototyping and proof of concept
+- **\`poc\`** - Proof of Concept development
+- **\`legacy\`** - Legacy system analysis
+- **\`modernization\`** - System modernization
+- **\`hotfix\`** - Hotfix and emergency patches
+- **\`patch\`** - Patch management and updates
+- **\`release\`** - Release management and deployment
+- **\`versioning\`** - Version control and management
+- **\`maintenance\`** - System maintenance and support
+
+## 📊 TESTING & QUALITY MODES
+- **\`integration\`** - Integration testing
+- **\`e2e\`** - End-to-end testing
+- **\`unit\`** - Unit testing
+- **\`functional\`** - Functional testing
+- **\`loadtest\`** - Load testing and performance
+- **\`benchmarking\`** - Performance benchmarking
+- **\`profiling\`** - Code profiling and optimization
+
+## 🎯 SPECIALIZED TECHNOLOGY MODES
+- **\`smart-contract\`** - Smart contract development
+- **\`defi\`** - Decentralized Finance applications
+- **\`web3\`** - Web3 and decentralized applications
+- **\`ethereum\`** - Ethereum blockchain development
+- **\`solidity\`** - Solidity smart contract language
+- **\`layer2\`** - Layer 2 blockchain solutions
+- **\`quantum-computing\`** - Quantum computing algorithms
+- **\`machine-learning\`** - Machine learning models
+- **\`deep-learning\`** - Deep learning neural networks
+- **\`computer-vision\`** - Computer vision systems
+- **\`nlp\`** - Natural Language Processing
+- **\`robotics\`** - Robotics and automation
+- **\`iot\`** - Internet of Things devices
+- **\`ar\`** - Augmented Reality applications
+- **\`vr\`** - Virtual Reality applications
+
+## 💻 PROGRAMMING LANGUAGE MODES
+- **\`javascript\`** - JavaScript-specific analysis
+- **\`typescript\`** - TypeScript development
+- **\`python\`** - Python programming
+- **\`rust\`** - Rust systems programming
+- **\`go\`** - Go programming language
+- **\`java\`** - Java development
+- **\`csharp\`** - C# and .NET development
+- **\`cpp\`** - C++ programming
+- **\`swift\`** - Swift iOS development
+- **\`kotlin\`** - Kotlin Android development
+- **\`php\`** - PHP web development
+- **\`ruby\`** - Ruby programming
+- **\`scala\`** - Scala functional programming
+- **\`elixir\`** - Elixir and Phoenix framework
+- **\`dart\`** - Dart and Flutter development
+
+## 🏗️ ARCHITECTURE & PATTERNS MODES
+- **\`architecture-patterns\`** - Software architecture patterns
+- **\`design-patterns\`** - Design patterns implementation
+- **\`domain-driven\`** - Domain-Driven Design
+- **\`event-sourcing\`** - Event sourcing architecture
+- **\`cqrs\`** - Command Query Responsibility Segregation
+- **\`hexagonal\`** - Hexagonal architecture
+- **\`clean-architecture\`** - Clean architecture principles
+- **\`best-practices\`** - Best practices and conventions
+- **\`anti-patterns\`** - Anti-patterns and code smells
+- **\`technical-debt\`** - Technical debt management
+- **\`clean-code\`** - Clean code principles
+- **\`solid\`** - SOLID principles
+- **\`patterns\`** - General design patterns
+
+## 📈 MONITORING & ANALYTICS MODES
+- **\`analytics\`** - Analytics and data tracking
+- **\`telemetry\`** - Application telemetry
+- **\`tracing\`** - Distributed tracing
+- **\`distributed-tracing\`** - Distributed system tracing
+- **\`networking\`** - Network architecture and protocols
+- **\`service-mesh\`** - Service mesh architecture
+
+## 🎓 EDUCATIONAL & RESEARCH MODES
+- **\`education\`** - Educational content and tutorials
+- **\`research\`** - Research and academic projects
+- **\`opensource\`** - Open source project development
+- **\`freelancer\`** - Freelance project optimization
+
 - **\`embedded\`** - IoT, hardware programming, edge computing
 
 ## 🏗️ ARCHITECTURE & INFRASTRUCTURE MODES (System-level)
@@ -2091,7 +2320,9 @@ All AI models (including Gemini) perform significantly better with English promp
 - **Building?** → \`implementation\` or technology-specific mode
 - **Debugging?** → \`debugging\` or \`security\`
 - **Optimizing?** → \`performance\` or \`refactoring\`
-- **Deploying?** → \`devops\` or \`enterprise\``,
+- **Deploying?** → \`devops\` or \`enterprise\`
+
+Choose the mode that best fits your specific question or domain for optimal results!`,
 
           "search-tips": `# 🔍 Master Search Queries for Best Results
 
@@ -2375,7 +2606,224 @@ Question: "Analyze the database schema, relationships, and suggest optimizations
 1. **Start with**: \`get_usage_guide\` with \`overview\` topic
 2. **Learn modes**: Use \`analysis-modes\` topic
 3. **Search help**: Use \`search-tips\` topic
-4. **Still stuck?** Try \`examples\` topic for workflows`
+4. **Still stuck?** Try \`examples\` topic for workflows`,
+
+          "client-side-setup": `# 📁 Client-Side File Reading Setup (REQUIRED)
+
+## ⚠️ Why Client-Side Architecture?
+This MCP server uses **client-side file reading** for:
+- **🔒 Security**: Server never accesses your file system
+- **🐳 Docker compatibility**: Works in containers without volume mounts
+- **🌐 Public deployment**: Safe for shared/public MCP servers
+- **⚡ Performance**: Faster than server-side file system access
+
+## 🔧 Setup Methods
+
+### Method 1: Node.js (Recommended)
+1. **Download the client helper:**
+   \`\`\`bash
+   curl -O https://raw.githubusercontent.com/yourrepo/gemini-mcp-server/main/client-side-example.js
+   \`\`\`
+
+2. **Install dependencies:**
+   \`\`\`bash
+   npm install glob
+   \`\`\`
+
+3. **Use with your project:**
+   \`\`\`bash
+   # Current directory
+   node client-side-example.js . "What does this project do?"
+   
+   # Specific directory
+   node client-side-example.js "/path/to/project" "Find all API endpoints"
+   
+   # Windows path
+   node client-side-example.js "C:\\Users\\Name\\MyProject" "Explain the architecture"
+   \`\`\`
+
+### Method 2: Python
+1. **Download the Python helper:**
+   \`\`\`bash
+   curl -O https://raw.githubusercontent.com/yourrepo/gemini-mcp-server/main/client-side-example.py
+   \`\`\`
+
+2. **Use with your project:**
+   \`\`\`bash
+   python client-side-example.py . "What does this project do?"
+   \`\`\`
+
+### Method 3: Manual Format (Any Language)
+If you prefer to implement your own file reading:
+
+\`\`\`
+--- File: package.json ---
+{
+  "name": "my-project",
+  "version": "1.0.0"
+}
+
+--- File: src/index.js ---
+console.log("Hello world");
+
+--- File: README.md ---
+# My Project
+This is a sample project.
+
+\`\`\`
+
+## 📋 Format Requirements
+- **File separator**: \`--- File: path/to/file ---\`
+- **Line ending**: Each file section ends with \`\\n\\n\`
+- **Relative paths**: Use project-relative paths (e.g., \`src/index.js\`)
+- **No binary files**: Skip images, PDFs, executables, etc.
+
+## 🔍 File Patterns (Auto-included)
+The client helpers automatically include:
+- **Code files**: \`.js\`, \`.ts\`, \`.py\`, \`.java\`, \`.cpp\`, \`.go\`, etc.
+- **Config files**: \`package.json\`, \`tsconfig.json\`, \`.env\`, etc.
+- **Documentation**: \`README.md\`, \`CHANGELOG.md\`, etc.
+- **Web files**: \`.html\`, \`.css\`, \`.scss\`, etc.
+
+## 🚫 Auto-excluded Patterns
+- **Dependencies**: \`node_modules/\`, \`vendor/\`, \`lib/\`
+- **Build outputs**: \`dist/\`, \`build/\`, \`out/\`
+- **Version control**: \`.git/\`, \`.svn/\`
+- **Large files**: > 500KB per file
+- **Binary files**: Images, videos, executables
+
+## 💡 Pro Tips
+- **Start small**: Test with a simple project first
+- **Check size**: Keep total context under 50MB
+- **Use patterns**: Leverage the auto-include/exclude patterns
+- **Test locally**: Verify the format works before sending to server
+
+## 🔧 Integration with MCP Clients
+Once you have the formatted content, use it with any MCP client:
+
+\`\`\`javascript
+const mcpRequest = {
+  tool: 'gemini_codebase_analyzer',
+  arguments: {
+    codebaseContext: formattedContent,
+    question: 'What does this project do?',
+    analysisMode: 'general'
+  }
+};
+\`\`\`
+
+## 🐛 Troubleshooting
+- **Empty context**: Check if files are being read correctly
+- **Token limit**: Reduce project size or exclude more patterns
+- **Format errors**: Ensure proper file separators
+- **No files found**: Verify the project path is correct`,
+
+          "advanced-tips": `# 🚀 Advanced Tips for Maximum Efficiency
+
+## 🎯 Analysis Mode Selection Strategy
+**Choose based on your goal:**
+- **Learning a new codebase**: \`onboarding\` → \`explanation\` → \`architecture\`
+- **Building features**: \`implementation\` → \`testing\` → \`review\`
+- **Debugging issues**: \`debugging\` → \`testing\` → \`security\`
+- **Performance optimization**: \`performance\` → \`devops\` → \`monitoring\`
+
+## 📊 Token Management
+- **Max context**: 2M tokens (Gemini 2.5 Pro)
+- **Optimal size**: 100K-500K tokens for best performance
+- **File limits**: 500KB per file, 500 files max
+- **Monitor usage**: Check file count and character count in results
+
+## 🔍 Search vs Analysis Strategy
+**Use \`gemini_code_search\` when:**
+- Looking for specific functions/classes
+- Finding implementation examples
+- Locating configuration or setup code
+- Quick reference lookups
+
+**Use \`gemini_codebase_analyzer\` when:**
+- Understanding overall architecture
+- Learning how systems work together
+- Code review and quality assessment
+- Strategic planning and refactoring
+
+## 🏎️ Performance Optimization
+1. **Pre-filter files**: Remove unnecessary files before formatting
+2. **Use specific modes**: Choose the most relevant analysis mode
+3. **Batch similar questions**: Ask related questions in one session
+4. **Cache results**: Save analysis results for future reference
+
+## 🔑 API Key Management
+- **Multiple keys**: Use comma-separated keys for automatic rotation
+- **Rate limits**: System automatically handles 15 RPM limits
+- **Key rotation**: Automatic failover when limits are hit
+- **Monitoring**: Use \`check_api_key_status\` to monitor usage
+
+## 📝 Question Optimization
+**Structure your questions for best results:**
+1. **Context**: "In this React application..."
+2. **Goal**: "I want to understand..."
+3. **Specificity**: "How does the authentication system work?"
+4. **Scope**: "Focus on the login flow"
+
+**Examples of great questions:**
+- "Explain the database schema and how the models relate to each other"
+- "What are the security vulnerabilities in this authentication system?"
+- "How would I add a new API endpoint following the existing patterns?"
+- "What's the deployment process and how can it be improved?"
+
+## 🔄 Workflow Patterns
+**Full codebase analysis:**
+1. \`onboarding\` mode - Get overview
+2. \`architecture\` mode - Understand structure
+3. \`security\` mode - Check for vulnerabilities
+4. \`performance\` mode - Identify bottlenecks
+
+**Feature development:**
+1. \`implementation\` mode - Plan the feature
+2. \`testing\` mode - Design tests
+3. \`review\` mode - Validate implementation
+4. \`documentation\` mode - Update docs
+
+## 🎨 Language-Specific Tips
+**Frontend (React/Vue/Angular):**
+- Use \`frontend\` mode for component analysis
+- Ask about state management patterns
+- Focus on performance and user experience
+
+**Backend (Node.js/Python/Java):**
+- Use \`backend\` mode for API analysis
+- Ask about scalability and security
+- Focus on database design and API patterns
+
+**DevOps/Infrastructure:**
+- Use \`devops\` mode for deployment analysis
+- Ask about CI/CD pipelines
+- Focus on monitoring and reliability
+
+## 🔧 Custom Analysis Modes
+**Combine modes for complex projects:**
+- \`enterprise\` + \`security\` for corporate applications
+- \`startup\` + \`performance\` for MVPs
+- \`research\` + \`aiml\` for academic projects
+
+## 📈 Monitoring and Debugging
+- **Log analysis**: Use \`get_logs\` to debug issues
+- **API status**: Check \`check_api_key_status\` regularly
+- **Token usage**: Monitor context size in results
+- **Performance**: Track analysis time and accuracy
+
+## 🌐 Multi-Language Projects
+**For polyglot codebases:**
+1. Start with \`architecture\` mode for overall structure
+2. Use language-specific modes for detailed analysis
+3. Focus on integration patterns between languages
+4. Ask about deployment and build processes
+
+## 🎯 Expert-Level Usage
+- **Combine tools**: Use search to find code, then analyze with specific modes
+- **Iterative refinement**: Start broad, then narrow down with specific questions
+- **Context awareness**: Reference previous analysis results in new questions
+- **Pattern recognition**: Learn to recognize when to use which mode`
         };
 
         return {
